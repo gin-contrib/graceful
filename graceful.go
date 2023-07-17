@@ -127,7 +127,10 @@ func (g *Graceful) RunWithContext(ctx context.Context) error {
 	g.lock.Unlock()
 
 	wg.Wait()
-	return ctx.Err()
+	if ctx.Err() != nil {
+		return context.Cause(ctx)
+	}
+	return nil
 }
 
 // Shutdown gracefully shuts down the server without interrupting any active connections.
