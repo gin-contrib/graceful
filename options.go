@@ -3,7 +3,6 @@ package graceful
 import (
 	"fmt"
 	"net"
-	"net/http"
 	"os"
 )
 
@@ -23,10 +22,10 @@ func (o optionFunc) apply(g *Graceful) (listenAndServe, cleanup, error) {
 // WithAddr configure a http.Server to listen on the given address.
 func WithAddr(addr string) Option {
 	return optionFunc(func(g *Graceful) (listenAndServe, cleanup, error) {
-		srv := &http.Server{Addr: addr, Handler: g.Engine}
-		g.servers = append(g.servers, srv)
-
 		return func() error {
+			srv := g.appendHttpServer()
+			srv.Addr = addr
+
 			return srv.ListenAndServe()
 		}, donothing, nil
 	})
@@ -35,10 +34,11 @@ func WithAddr(addr string) Option {
 // WithTLS configure a http.Server to listen on the given address and serve HTTPS requests.
 func WithTLS(addr string, certFile string, keyFile string) Option {
 	return optionFunc(func(g *Graceful) (listenAndServe, cleanup, error) {
-		srv := &http.Server{Addr: addr, Handler: g.Engine}
-		g.servers = append(g.servers, srv)
-
 		return func() error {
+			srv := g.appendHttpServer()
+			srv.Addr = addr
+			g.servers = append(g.servers, srv)
+
 			return srv.ListenAndServeTLS(certFile, keyFile)
 		}, donothing, nil
 	})
@@ -83,10 +83,9 @@ func WithListener(l net.Listener) Option {
 }
 
 func listen(g *Graceful, l net.Listener, close cleanup) (listenAndServe, cleanup, error) {
-	srv := &http.Server{Handler: g.Engine}
-	g.servers = append(g.servers, srv)
-
 	return func() error {
+			srv := g.appendHttpServer()
+
 			return srv.Serve(l)
 		}, func() {
 			close()

@@ -108,7 +108,7 @@ func (g *Graceful) RunWithContext(ctx context.Context) error {
 
 	g.lock.Lock()
 
-	if len(g.servers) == 0 {
+	if len(g.listenAndServe) == 0 {
 		if err := g.apply(WithAddr(":8080")); err != nil {
 			return err
 		}
@@ -142,6 +142,8 @@ func (g *Graceful) Shutdown(ctx context.Context) error {
 			e = err
 		}
 	}
+	g.servers = nil
+
 	return err
 }
 
@@ -169,6 +171,16 @@ func (g *Graceful) apply(o Option) error {
 	g.listenAndServe = append(g.listenAndServe, srv)
 	g.cleanup = append(g.cleanup, cleanup)
 	return nil
+}
+
+func (g *Graceful) appendHttpServer() *http.Server {
+	srv := &http.Server{Handler: g.Engine}
+
+	g.lock.Lock()
+	defer g.lock.Unlock()
+	g.servers = append(g.servers, srv)
+
+	return srv
 }
 
 func donothing() {}
