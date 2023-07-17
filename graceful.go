@@ -2,6 +2,7 @@ package graceful
 
 import (
 	"context"
+	"errors"
 	"net"
 	"net/http"
 	"sync"
@@ -13,11 +14,17 @@ import (
 type Graceful struct {
 	*gin.Engine
 
+	started context.Context
+	stop    context.CancelFunc
+
 	lock           sync.Mutex
 	servers        []*http.Server
 	listenAndServe []listenAndServe
 	cleanup        []cleanup
 }
+
+var ErrAlreadyStarted = errors.New("already started router")
+var ErrNotStarted = errors.New("router not started")
 
 type listenAndServe func() error
 type cleanup func()
@@ -146,6 +153,54 @@ func (g *Graceful) Shutdown(ctx context.Context) error {
 		}
 	}
 	g.servers = nil
+
+	return err
+}
+
+// Start will start the Graceful instance and all underlying http.Servers in a separate
+// goroutine and return right away. You must call Stop and not Shutdown if you use Start.
+func (g *Graceful) Start() error {
+	g.lock.Lock()
+	defer g.lock.Unlock()
+
+	if g.started != nil {
+		return ErrAlreadyStarted
+	}
+
+	ctxStop, cancelStop := context.WithCancel(context.Background())
+
+	ctx, cancel := context.WithCancelCause(ctxStop)
+	go func() {
+		err := g.RunWithContext(ctx)
+		cancel(err)
+	}()
+
+	g.stop = cancelStop
+	g.started = ctx
+
+	return nil
+}
+
+// Stop will stop the Graceful instance previously started with Start. It
+// will return once the instance has been stopped.
+func (g *Graceful) Stop() error {
+	g.lock.Lock()
+	defer g.lock.Unlock()
+
+	if g.started == nil {
+		return ErrNotStarted
+	}
+
+	g.stop()
+	<-g.started.Done()
+
+	err := context.Cause(g.started)
+	if errors.Is(err, context.Canceled) {
+		err = nil
+	}
+
+	g.stop = nil
+	g.started = nil
 
 	return err
 }
