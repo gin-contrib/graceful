@@ -241,9 +241,6 @@ func testRouterConstructor(t *testing.T, constructor func() (*Graceful, error), 
 		cancel()
 	}()
 
-	// have to wait for the goroutine to start and run the server
-	// otherwise the main thread will complete
-	time.Sleep(5 * time.Millisecond)
 	testRequest(t, urls...)
 
 	err = router.Shutdown(context.Background())
@@ -263,9 +260,6 @@ func testRouterRun(t *testing.T, run func(*Graceful) error, urls ...string) {
 		assert.NoError(t, run(router))
 	}()
 
-	// have to wait for the goroutine to start and run the server
-	// otherwise the main thread will complete
-	time.Sleep(5 * time.Millisecond)
 	testRequest(t, urls...)
 
 	err = router.Shutdown(context.Background())
@@ -273,6 +267,10 @@ func testRouterRun(t *testing.T, run func(*Graceful) error, urls ...string) {
 }
 
 func testRequest(t *testing.T, urls ...string) {
+	// have to wait for the goroutine to start and run the server
+	// otherwise the main thread will complete
+	time.Sleep(5 * time.Millisecond)
+
 	if len(urls) == 0 {
 		t.Fatal("url cannot be empty")
 	}
