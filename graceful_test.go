@@ -26,8 +26,8 @@ func TestDefault(t *testing.T) {
 
 func TestWithAddr(t *testing.T) {
 	testRouterConstructor(t, func() (*Graceful, error) {
-		return Default(WithAddr(":8080"))
-	}, "http://localhost:8080/example")
+		return Default(WithAddr(":8081"))
+	}, "http://localhost:8081/example")
 }
 
 func TestWithTLS(t *testing.T) {
