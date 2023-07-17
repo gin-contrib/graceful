@@ -233,9 +233,12 @@ func testRouterConstructor(t *testing.T, constructor func() (*Graceful, error), 
 	assert.NotNil(t, router)
 	defer router.Close()
 
+	ctx, cancel := context.WithCancel(context.Background())
+
 	go func() {
 		router.GET("/example", func(c *gin.Context) { c.String(http.StatusOK, "it worked") })
-		assert.NoError(t, router.Run())
+		assert.NoError(t, router.RunWithContext(ctx))
+		cancel()
 	}()
 
 	// have to wait for the goroutine to start and run the server
@@ -245,11 +248,13 @@ func testRouterConstructor(t *testing.T, constructor func() (*Graceful, error), 
 
 	err = router.Shutdown(context.Background())
 	assert.NoError(t, err)
+
+	<-ctx.Done()
 }
 
 func testRouterRun(t *testing.T, run func(*Graceful) error, urls ...string) {
 	router, err := Default()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.NotNil(t, router)
 	defer router.Close()
 
