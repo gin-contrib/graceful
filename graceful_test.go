@@ -37,29 +37,20 @@ func TestCycle(t *testing.T) {
 
 	router.GET("/example", func(c *gin.Context) { c.String(http.StatusOK, "it worked") })
 
-	run := func() context.Context {
-		ctx, cancel := context.WithCancel(context.Background())
+	for i := 0; i < 10; i++ {
+		ctxEnd, cancelEnd := context.WithCancel(context.Background())
+		ctxService, cancelService := context.WithCancel(context.Background())
 
 		go func(ctx context.Context, cancel context.CancelFunc) {
-			assert.NoError(t, router.RunWithContext(ctx))
-			cancel()
-		}(ctx, cancel)
+			assert.ErrorIs(t, router.RunWithContext(ctxService), context.Canceled)
+			cancelEnd()
+		}(ctxEnd, cancelEnd)
 
-		return ctx
+		testRequest(t, "http://localhost:8080/example")
+
+		cancelService()
+		<-ctxEnd.Done()
 	}
-
-	ctx := run()
-
-	testRequest(t, "http://localhost:8080/example")
-
-	assert.NoError(t, router.Shutdown(context.Background()))
-	<-ctx.Done()
-
-	ctx = run()
-	testRequest(t, "http://localhost:8080/example")
-
-	assert.NoError(t, router.Shutdown(context.Background()))
-	<-ctx.Done()
 }
 
 func TestSimpleCycle(t *testing.T) {
@@ -69,17 +60,11 @@ func TestSimpleCycle(t *testing.T) {
 
 	router.GET("/example", func(c *gin.Context) { c.String(http.StatusOK, "it worked") })
 
-	assert.NoError(t, router.Start())
-	testRequest(t, "http://localhost:8080/example")
-	assert.NoError(t, router.Stop())
-
-	assert.NoError(t, router.Start())
-	testRequest(t, "http://localhost:8080/example")
-	assert.NoError(t, router.Stop())
-
-	assert.NoError(t, router.Start())
-	testRequest(t, "http://localhost:8080/example")
-	assert.NoError(t, router.Stop())
+	for i := 0; i < 10; i++ {
+		assert.NoError(t, router.Start())
+		testRequest(t, "http://localhost:8080/example")
+		assert.NoError(t, router.Stop())
+	}
 }
 
 func TestWithTLS(t *testing.T) {
