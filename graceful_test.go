@@ -30,6 +30,38 @@ func TestWithAddr(t *testing.T) {
 	}, "http://localhost:8081/example")
 }
 
+func TestCycle(t *testing.T) {
+	router, err := Default()
+	assert.NoError(t, err)
+	assert.NotNil(t, router)
+
+	router.GET("/example", func(c *gin.Context) { c.String(http.StatusOK, "it worked") })
+
+	run := func() context.Context {
+		ctx, cancel := context.WithCancel(context.Background())
+
+		go func(ctx context.Context, cancel context.CancelFunc) {
+			assert.NoError(t, router.RunWithContext(ctx))
+			cancel()
+		}(ctx, cancel)
+
+		return ctx
+	}
+
+	ctx := run()
+
+	testRequest(t, "http://localhost:8080/example")
+
+	assert.NoError(t, router.Shutdown(context.Background()))
+	<-ctx.Done()
+
+	ctx = run()
+	testRequest(t, "http://localhost:8080/example")
+
+	assert.NoError(t, router.Shutdown(context.Background()))
+	<-ctx.Done()
+}
+
 func TestWithTLS(t *testing.T) {
 	testRouterConstructor(t, func() (*Graceful, error) {
 		return Default(WithTLS(":8443", "./testdata/certificate/cert.pem", "./testdata/certificate/key.pem"))
