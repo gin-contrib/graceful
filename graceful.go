@@ -167,16 +167,15 @@ func (g *Graceful) Start() error {
 		return ErrAlreadyStarted
 	}
 
-	ctxStop, cancelStop := context.WithCancel(context.Background())
-
-	ctx, cancel := context.WithCancelCause(ctxStop)
+	ctxStarted, cancel := context.WithCancelCause(context.Background())
+	ctx, cancelStop := context.WithCancel(context.Background())
 	go func() {
 		err := g.RunWithContext(ctx)
 		cancel(err)
 	}()
 
 	g.stop = cancelStop
-	g.started = ctx
+	g.started = ctxStarted
 
 	return nil
 }
@@ -184,23 +183,33 @@ func (g *Graceful) Start() error {
 // Stop will stop the Graceful instance previously started with Start. It
 // will return once the instance has been stopped.
 func (g *Graceful) Stop() error {
-	g.lock.Lock()
-	defer g.lock.Unlock()
+	resetStartedState := func() (context.Context, context.CancelFunc, error) {
+		g.lock.Lock()
+		defer g.lock.Unlock()
 
-	if g.started == nil {
-		return ErrNotStarted
+		if g.started == nil {
+			return nil, nil, ErrNotStarted
+		}
+
+		stop := g.stop
+		started := g.started
+		g.stop = nil
+		g.started = nil
+
+		return started, stop, nil
+	}
+	started, stop, err := resetStartedState()
+	if err != nil {
+		return err
 	}
 
-	g.stop()
-	<-g.started.Done()
+	stop()
+	<-started.Done()
 
-	err := context.Cause(g.started)
+	err = context.Cause(started)
 	if errors.Is(err, context.Canceled) {
 		err = nil
 	}
-
-	g.stop = nil
-	g.started = nil
 
 	return err
 }
