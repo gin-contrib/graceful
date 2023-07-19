@@ -109,7 +109,7 @@ func (g *Graceful) RunWithContext(ctx context.Context) error {
 	ctx, cancel := context.WithCancelCause(ctx)
 	go func() {
 		<-ctx.Done()
-		g.Shutdown(ctx)
+		_ = g.Shutdown(ctx)
 	}()
 	defer cancel(nil)
 
@@ -127,7 +127,7 @@ func (g *Graceful) RunWithContext(ctx context.Context) error {
 			defer wg.Done()
 			if err := srv(); err != nil && err != http.ErrServerClosed {
 				cancel(err)
-				g.Shutdown(ctx)
+				_ = g.Shutdown(ctx)
 			}
 		}(srv)
 	}
@@ -149,7 +149,7 @@ func (g *Graceful) Shutdown(ctx context.Context) error {
 
 	for _, srv := range g.servers {
 		if e := srv.Shutdown(ctx); e != nil {
-			e = err
+			err = e
 		}
 	}
 	g.servers = nil
@@ -216,7 +216,7 @@ func (g *Graceful) Stop() error {
 
 // Close shutdown the Graceful instance and close all underlying http.Servers.
 func (g *Graceful) Close() {
-	g.Shutdown(context.Background())
+	_ = g.Shutdown(context.Background())
 
 	g.lock.Lock()
 	defer g.lock.Unlock()
