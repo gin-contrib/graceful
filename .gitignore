@@ -23,5 +23,5 @@ _testmain.go
 *.test
 *.prof
 
-coverage.out
+coverage.*
 examples/notify/notify
