@@ -10,7 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// Graceful is a wrapper around a gin.Engine that provides graceful shutdown
+// Graceful is a wrapper around a [gin.Engine] that provides graceful shutdown
 type Graceful struct {
 	*gin.Engine
 
@@ -23,7 +23,10 @@ type Graceful struct {
 	cleanup        []cleanup
 }
 
+// ErrAlreadyStarted is returned when trying to start a router that has already been started
 var ErrAlreadyStarted = errors.New("already started router")
+
+// ErrNotStarted is returned when trying to stop a router that has not been started
 var ErrNotStarted = errors.New("router not started")
 
 type listenAndServe func() error
