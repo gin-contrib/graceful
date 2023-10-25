@@ -17,6 +17,7 @@ type Graceful struct {
 
 	started context.Context
 	stop    context.CancelFunc
+	err     chan error
 
 	lock           sync.Mutex
 	servers        []*http.Server
@@ -165,11 +166,13 @@ func (g *Graceful) Start() error {
 		return ErrAlreadyStarted
 	}
 
+	g.err = make(chan error)
 	ctxStarted, cancel := context.WithCancel(context.Background())
 	ctx, cancelStop := context.WithCancel(context.Background())
 	go func() {
-		g.RunWithContext(ctx)
+		err := g.RunWithContext(ctx)
 		cancel()
+		g.err <- err
 	}()
 
 	g.stop = cancelStop
@@ -181,28 +184,34 @@ func (g *Graceful) Start() error {
 // Stop will stop the Graceful instance previously started with Start. It
 // will return once the instance has been stopped.
 func (g *Graceful) Stop() error {
-	resetStartedState := func() (context.Context, context.CancelFunc, error) {
+	resetStartedState := func() (context.Context, context.CancelFunc, chan error, error) {
 		g.lock.Lock()
 		defer g.lock.Unlock()
 
 		if g.started == nil {
-			return nil, nil, ErrNotStarted
+			return nil, nil, nil, ErrNotStarted
 		}
 
 		stop := g.stop
 		started := g.started
+		chErr := g.err
 		g.stop = nil
 		g.started = nil
 
-		return started, stop, nil
+		return started, stop, chErr, nil
 	}
-	started, stop, err := resetStartedState()
+	started, stop, chErr, err := resetStartedState()
 	if err != nil {
 		return err
 	}
 
 	stop()
+	err = <-chErr
 	<-started.Done()
+
+	if !errors.Is(err, context.Canceled) {
+		return err
+	}
 
 	err = started.Err()
 	if errors.Is(err, context.Canceled) {
@@ -261,20 +270,14 @@ func (g *Graceful) ensureAtLeastDefaultServer() error {
 }
 
 func waitWithContext(ctx context.Context, eg *errgroup.Group) error {
-	done := make(chan error)
-	go func() {
-		defer close(done)
-		done <- eg.Wait()
-	}()
-
+	if err := eg.Wait(); err != nil {
+		return err
+	}
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
-	case err := <-done:
-		if errors.Is(err, context.Canceled) {
-			return nil
-		}
-		return err
+	default:
+		return nil
 	}
 }
 
