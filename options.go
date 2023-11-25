@@ -23,7 +23,7 @@ func (o optionFunc) apply(g *Graceful) (listenAndServe, cleanup, error) {
 func WithAddr(addr string) Option {
 	return optionFunc(func(g *Graceful) (listenAndServe, cleanup, error) {
 		return func() error {
-			srv := g.appendHttpServer()
+			srv := g.appendHTTPServer()
 			srv.Addr = addr
 
 			return srv.ListenAndServe()
@@ -35,9 +35,11 @@ func WithAddr(addr string) Option {
 func WithTLS(addr string, certFile string, keyFile string) Option {
 	return optionFunc(func(g *Graceful) (listenAndServe, cleanup, error) {
 		return func() error {
-			srv := g.appendHttpServer()
+			srv := g.appendHTTPServer()
 			srv.Addr = addr
+			g.lock.Lock()
 			g.servers = append(g.servers, srv)
+			g.lock.Unlock()
 
 			return srv.ListenAndServeTLS(certFile, keyFile)
 		}, donothing, nil
@@ -62,7 +64,7 @@ func WithUnix(file string) Option {
 // WithFd configure a http.Server to listen on the given file descriptor.
 func WithFd(fd uintptr) Option {
 	return optionFunc(func(g *Graceful) (listenAndServe, cleanup, error) {
-		f := os.NewFile(uintptr(fd), fmt.Sprintf("fd@%d", fd))
+		f := os.NewFile(fd, fmt.Sprintf("fd@%d", fd))
 		listener, err := net.FileListener(f)
 		if err != nil {
 			return nil, donothing, err
@@ -84,7 +86,7 @@ func WithListener(l net.Listener) Option {
 
 func listen(g *Graceful, l net.Listener, close cleanup) (listenAndServe, cleanup, error) {
 	return func() error {
-			srv := g.appendHttpServer()
+			srv := g.appendHTTPServer()
 
 			return srv.Serve(l)
 		}, func() {

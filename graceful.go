@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -29,8 +30,10 @@ var ErrAlreadyStarted = errors.New("already started router")
 // ErrNotStarted is returned when trying to stop a router that has not been started
 var ErrNotStarted = errors.New("router not started")
 
-type listenAndServe func() error
-type cleanup func()
+type (
+	listenAndServe func() error
+	cleanup        func()
+)
 
 // Default returns a Graceful gin instance with the Logger and Recovery middleware already attached.
 func Default(opts ...Option) (*Graceful, error) {
@@ -243,8 +246,11 @@ func (g *Graceful) apply(o Option) error {
 	return nil
 }
 
-func (g *Graceful) appendHttpServer() *http.Server {
-	srv := &http.Server{Handler: g.Engine}
+func (g *Graceful) appendHTTPServer() *http.Server {
+	srv := &http.Server{
+		Handler:           g.Engine,
+		ReadHeaderTimeout: time.Second * 5, // Set a reasonable ReadHeaderTimeout value
+	}
 
 	g.lock.Lock()
 	defer g.lock.Unlock()

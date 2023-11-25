@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"io"
 	"net"
@@ -41,7 +42,7 @@ func TestCycle(t *testing.T) {
 		ctxEnd, cancelEnd := context.WithCancel(context.Background())
 		ctxService, cancelService := context.WithCancel(context.Background())
 
-		go func(ctx context.Context, cancel context.CancelFunc) {
+		go func(_ context.Context, cancelEnd context.CancelFunc) {
 			assert.ErrorIs(t, router.RunWithContext(ctxService), context.Canceled)
 			cancelEnd()
 		}(ctxEnd, cancelEnd)
@@ -91,6 +92,7 @@ func TestWithFd(t *testing.T) {
 		return Default(WithFd(socketFile.Fd()))
 	}, fmt.Sprintf("http://localhost:%d/example", listener.Addr().(*net.TCPAddr).Port))
 }
+
 func TestWithListener(t *testing.T) {
 	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
 	assert.NoError(t, err)
@@ -144,8 +146,13 @@ func TestWithContext(t *testing.T) {
 	cancel()
 	<-ctx.Done()
 
+	req, err := http.NewRequestWithContext(context.Background(), "GET", "http://localhost:8080/example", nil)
+	assert.NoError(t, err)
 	client := &http.Client{Transport: &http.Transport{}}
-	_, err = client.Get("http://localhost:8080/example")
+	resp, err := client.Do(req)
+	if resp != nil {
+		defer resp.Body.Close()
+	}
 	assert.Error(t, err)
 
 	err = router.Shutdown(context.Background())
@@ -184,6 +191,7 @@ func TestRunFd(t *testing.T) {
 		return g.RunFd(socketFile.Fd())
 	}, fmt.Sprintf("http://localhost:%d/example", listener.Addr().(*net.TCPAddr).Port))
 }
+
 func TestRunListener(t *testing.T) {
 	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
 	assert.NoError(t, err)
@@ -304,6 +312,23 @@ func testRouterRun(t *testing.T, run func(*Graceful) error, urls ...string) {
 }
 
 func testRequest(t *testing.T, urls ...string) {
+	// Open the PEM file
+	file, err := os.Open("testdata/certificate/cert.pem")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+
+	// Create a new empty certificate pool
+	caCertPool := x509.NewCertPool()
+
+	// Load the PEM file into the certificate pool
+	pemData, err := io.ReadAll(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	caCertPool.AppendCertsFromPEM(pemData)
+
 	// have to wait for the goroutine to start and run the server
 	// otherwise the main thread will complete
 	time.Sleep(5 * time.Millisecond)
@@ -314,21 +339,24 @@ func testRequest(t *testing.T, urls ...string) {
 
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: true,
+			RootCAs:    caCertPool,
+			MinVersion: tls.VersionTLS12, // Fix for G402: TLS MinVersion too low
 		},
 	}
 	client := &http.Client{Transport: tr}
 
 	for _, url := range urls {
-		resp, err := client.Get(url)
+		req, err := http.NewRequestWithContext(context.Background(), "GET", url, nil)
+		assert.NoError(t, err)
+		resp, err := client.Do(req)
 		assert.NoError(t, err)
 		defer resp.Body.Close()
 
 		body, ioerr := io.ReadAll(resp.Body)
 		assert.NoError(t, ioerr)
 
-		var responseStatus = "200 OK"
-		var responseBody = "it worked"
+		responseStatus := "200 OK"
+		responseBody := "it worked"
 
 		assert.Equal(t, responseStatus, resp.Status, "should get a "+responseStatus)
 		if responseStatus == "200 OK" {
