@@ -227,7 +227,10 @@ func (g *Graceful) Stop() error {
 	return err
 }
 
-// Close shutdown the Graceful instance and close all underlying http.Servers.
+// Close gracefully shuts down the server.
+// It first shuts down the server using the Shutdown method,
+// then it performs any cleanup operations registered with the server.
+// Finally, it resets the server's internal state.
 func (g *Graceful) Close() {
 	_ = g.Shutdown(context.Background())
 
@@ -243,6 +246,9 @@ func (g *Graceful) Close() {
 	g.servers = nil
 }
 
+// apply applies the given option to the Graceful instance.
+// It creates a new server, applies the option to it, and adds the server and cleanup function to the Graceful instance.
+// If an error occurs during the application of the option, it returns the error.
 func (g *Graceful) apply(o Option) error {
 	srv, cleanup, err := o.apply(g)
 	if err != nil {
@@ -253,6 +259,8 @@ func (g *Graceful) apply(o Option) error {
 	return nil
 }
 
+// appendHTTPServer appends a new HTTP server to the list of servers managed by the Graceful instance.
+// It returns the newly created http.Server.
 func (g *Graceful) appendHTTPServer() *http.Server {
 	srv := &http.Server{
 		Handler:           g.Engine,
@@ -266,6 +274,9 @@ func (g *Graceful) appendHTTPServer() *http.Server {
 	return srv
 }
 
+// ensureAtLeastDefaultServer ensures that there is at least one server running with the default address ":8080".
+// If no server is running, it creates a new server with the default address and starts it.
+// It returns an error if there was a problem creating or starting the server.
 func (g *Graceful) ensureAtLeastDefaultServer() error {
 	g.lock.Lock()
 	defer g.lock.Unlock()
@@ -278,6 +289,9 @@ func (g *Graceful) ensureAtLeastDefaultServer() error {
 	return nil
 }
 
+// waitWithContext waits for the completion of the errgroup.Group and returns any error encountered.
+// If the context is canceled before the errgroup.Group completes, it returns the context error.
+// If the errgroup.Group completes successfully or the context is not canceled, it returns nil.
 func waitWithContext(ctx context.Context, eg *errgroup.Group) error {
 	if err := eg.Wait(); err != nil {
 		return err
