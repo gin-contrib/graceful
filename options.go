@@ -15,6 +15,8 @@ var _ Option = (*optionFunc)(nil)
 
 type optionFunc func(*Graceful) (listenAndServe, cleanup, error)
 
+// apply applies the option function to the Graceful instance.
+// It returns the listenAndServe function, cleanup function, and an error, if any.
 func (o optionFunc) apply(g *Graceful) (listenAndServe, cleanup, error) {
 	return o(g)
 }

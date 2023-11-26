@@ -4,7 +4,6 @@
 [![codecov](https://codecov.io/gh/gin-contrib/graceful/branch/master/graph/badge.svg)](https://codecov.io/gh/gin-contrib/graceful)
 [![Go Report Card](https://goreportcard.com/badge/github.com/gin-contrib/graceful)](https://goreportcard.com/report/github.com/gin-contrib/graceful)
 [![GoDoc](https://godoc.org/github.com/gin-contrib/graceful?status.svg)](https://godoc.org/github.com/gin-contrib/graceful)
-[![Join the chat at https://gitter.im/gin-gonic/gin](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/gin-gonic/gin)
 
 Gin wrapper to enable graceful termination when shutting down a process
 
