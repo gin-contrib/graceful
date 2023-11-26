@@ -1,10 +1,11 @@
 module github.com/gin-contrib/graceful
 
-go 1.20
+go 1.18
 
 require (
 	github.com/gin-gonic/gin v1.9.1
 	github.com/stretchr/testify v1.8.4
+	golang.org/x/sync v0.4.0
 )
 
 require (

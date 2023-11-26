@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"golang.org/x/sync/errgroup"
 )
 
 // Graceful is a wrapper around a [gin.Engine] that provides graceful shutdown
@@ -17,6 +18,7 @@ type Graceful struct {
 
 	started context.Context
 	stop    context.CancelFunc
+	err     chan error
 
 	lock           sync.Mutex
 	servers        []*http.Server
@@ -110,40 +112,37 @@ func (g *Graceful) RunListener(listener net.Listener) error {
 // :8080 if none are configured) and starts listening and serving HTTP requests. If the passed
 // context is canceled, the server is gracefully shut down
 func (g *Graceful) RunWithContext(ctx context.Context) error {
-	var wg sync.WaitGroup
+	if err := g.ensureAtLeastDefaultServer(); err != nil {
+		return err
+	}
 
-	ctx, cancel := context.WithCancelCause(ctx)
+	ctx, cancel := context.WithCancel(ctx)
 	go func() {
 		<-ctx.Done()
 		_ = g.Shutdown(ctx)
 	}()
-	defer cancel(nil)
+	defer cancel()
+
+	eg := errgroup.Group{}
 
 	g.lock.Lock()
 
-	if len(g.listenAndServe) == 0 {
-		if err := g.apply(WithAddr(":8080")); err != nil {
-			return err
-		}
+	for _, srv := range g.listenAndServe {
+		safeCopy := srv
+		eg.Go(func() error {
+			if err := safeCopy(); err != nil && err != http.ErrServerClosed {
+				return err
+			}
+			return nil
+		})
 	}
 
-	for _, srv := range g.listenAndServe {
-		wg.Add(1)
-		go func(srv listenAndServe) {
-			defer wg.Done()
-			if err := srv(); err != nil && err != http.ErrServerClosed {
-				cancel(err)
-				_ = g.Shutdown(ctx)
-			}
-		}(srv)
-	}
 	g.lock.Unlock()
 
-	wg.Wait()
-	if ctx.Err() != nil {
-		return context.Cause(ctx)
+	if err := waitWithContext(ctx, &eg); err != nil {
+		return err
 	}
-	return nil
+	return g.Shutdown(ctx)
 }
 
 // Shutdown gracefully shuts down the server without interrupting any active connections.
@@ -173,11 +172,13 @@ func (g *Graceful) Start() error {
 		return ErrAlreadyStarted
 	}
 
-	ctxStarted, cancel := context.WithCancelCause(context.Background())
+	g.err = make(chan error)
+	ctxStarted, cancel := context.WithCancel(context.Background())
 	ctx, cancelStop := context.WithCancel(context.Background())
 	go func() {
 		err := g.RunWithContext(ctx)
-		cancel(err)
+		cancel()
+		g.err <- err
 	}()
 
 	g.stop = cancelStop
@@ -189,30 +190,36 @@ func (g *Graceful) Start() error {
 // Stop will stop the Graceful instance previously started with Start. It
 // will return once the instance has been stopped.
 func (g *Graceful) Stop() error {
-	resetStartedState := func() (context.Context, context.CancelFunc, error) {
+	resetStartedState := func() (context.Context, context.CancelFunc, chan error, error) {
 		g.lock.Lock()
 		defer g.lock.Unlock()
 
 		if g.started == nil {
-			return nil, nil, ErrNotStarted
+			return nil, nil, nil, ErrNotStarted
 		}
 
 		stop := g.stop
 		started := g.started
+		chErr := g.err
 		g.stop = nil
 		g.started = nil
 
-		return started, stop, nil
+		return started, stop, chErr, nil
 	}
-	started, stop, err := resetStartedState()
+	started, stop, chErr, err := resetStartedState()
 	if err != nil {
 		return err
 	}
 
 	stop()
+	err = <-chErr
 	<-started.Done()
 
-	err = context.Cause(started)
+	if !errors.Is(err, context.Canceled) {
+		return err
+	}
+
+	err = started.Err()
 	if errors.Is(err, context.Canceled) {
 		err = nil
 	}
@@ -257,6 +264,30 @@ func (g *Graceful) appendHTTPServer() *http.Server {
 	g.servers = append(g.servers, srv)
 
 	return srv
+}
+
+func (g *Graceful) ensureAtLeastDefaultServer() error {
+	g.lock.Lock()
+	defer g.lock.Unlock()
+
+	if len(g.listenAndServe) == 0 {
+		if err := g.apply(WithAddr(":8080")); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func waitWithContext(ctx context.Context, eg *errgroup.Group) error {
+	if err := eg.Wait(); err != nil {
+		return err
+	}
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+		return nil
+	}
 }
 
 func donothing() {}
