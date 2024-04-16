@@ -24,7 +24,15 @@ func main() {
 		c.String(http.StatusOK, "Welcome Gin Server")
 	})
 
-	if err := router.RunWithContext(ctx); err != nil && err != context.Canceled {
+	go func() {
+		if err := router.RunWithContext(context.Background()); err != nil && err != context.Canceled {
+			panic(err)
+		}
+	}()
+
+	<-ctx.Done()
+
+	if err := router.Shutdown(context.Background()); err != nil {
 		panic(err)
 	}
 }
