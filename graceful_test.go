@@ -10,8 +10,11 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"runtime"
+	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -52,6 +55,85 @@ func TestCycle(t *testing.T) {
 		cancelService()
 		<-ctxEnd.Done()
 	}
+}
+
+func TestSimpleSignal(t *testing.T) {
+	router, err := Default()
+	assert.NoError(t, err)
+	assert.NotNil(t, router)
+	defer router.Close()
+
+	router.GET("/example", func(c *gin.Context) {
+		time.Sleep(20 * time.Second)
+		c.String(http.StatusOK, "it worked")
+	})
+
+	start := time.Now()
+
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT)
+	defer cancel()
+
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		assert.NoError(t, router.RunWithContext(context.Background()))
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		time.Sleep(5 * time.Second)
+		assert.NoError(t, syscall.Kill(syscall.Getpid(), syscall.SIGINT))
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		testRequest(t, "http://localhost:8080/example")
+	}()
+
+	<-ctx.Done()
+
+	assert.NoError(t, router.Shutdown(context.Background()))
+	assert.GreaterOrEqual(t, time.Since(start).Seconds(), 20.0)
+
+	wg.Wait()
+}
+
+func TestSimpleSleep(t *testing.T) {
+	router, err := Default()
+	assert.NoError(t, err)
+	assert.NotNil(t, router)
+	defer router.Close()
+
+	router.GET("/example", func(c *gin.Context) {
+		time.Sleep(20 * time.Second)
+		c.String(http.StatusOK, "it worked")
+	})
+
+	start := time.Now()
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		assert.NoError(t, router.RunWithContext(context.Background()))
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		testRequest(t, "http://localhost:8080/example")
+	}()
+
+	time.Sleep(5 * time.Second)
+
+	assert.NoError(t, router.Shutdown(context.Background()))
+	assert.GreaterOrEqual(t, time.Since(start).Seconds(), 20.0)
+
+	wg.Wait()
 }
 
 func TestSimpleCycle(t *testing.T) {
