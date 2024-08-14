@@ -1,6 +1,6 @@
 module example
 
-go 1.18
+go 1.20
 
 require (
 	github.com/gin-contrib/graceful v1.0.2
