@@ -187,6 +187,20 @@ func TestWithListener(t *testing.T) {
 	}, fmt.Sprintf("http://localhost:%d/example", listener.Addr().(*net.TCPAddr).Port))
 }
 
+func TestWithServer(t *testing.T) {
+	cert, err := tls.LoadX509KeyPair("./testdata/certificate/cert.pem", "./testdata/certificate/key.pem")
+	assert.NoError(t, err)
+	tlsConfig := &tls.Config{
+		Certificates: []tls.Certificate{cert},
+	}
+	testRouterConstructor(t, func() (*Graceful, error) {
+		return Default(
+			WithServer(&http.Server{Addr: ":8811"}),
+			WithServer(&http.Server{Addr: ":9443", TLSConfig: tlsConfig}),
+		)
+	}, "http://localhost:8811/example", "https://localhost:9443/example")
+}
+
 func TestWithAll(t *testing.T) {
 	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
 	assert.NoError(t, err)
@@ -198,11 +212,14 @@ func TestWithAll(t *testing.T) {
 		return Default(WithAddr(":8080"),
 			WithTLS(":8443", "./testdata/certificate/cert.pem", "./testdata/certificate/key.pem"),
 			WithListener(listener),
+			WithServer(&http.Server{Addr: ":8811"}),
 		)
 	},
 		"http://localhost:8080/example",
 		"https://localhost:8443/example",
-		fmt.Sprintf("http://localhost:%d/example", listener.Addr().(*net.TCPAddr).Port))
+		fmt.Sprintf("http://localhost:%d/example", listener.Addr().(*net.TCPAddr).Port),
+		"http://localhost:8811/example",
+	)
 }
 
 func TestWithContext(t *testing.T) {

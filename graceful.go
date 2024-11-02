@@ -274,6 +274,16 @@ func (g *Graceful) appendHTTPServer() *http.Server {
 	return srv
 }
 
+// appendExistHTTPServer appends an existing HTTP server to the list of servers managed by the Graceful instance.
+// This allows for customization of the http.Server, and srv.Handler will be set to the current g.Engine.
+func (g *Graceful) appendExistHTTPServer(srv *http.Server) {
+	srv.Handler = g.Engine
+
+	g.lock.Lock()
+	defer g.lock.Unlock()
+	g.servers = append(g.servers, srv)
+}
+
 // ensureAtLeastDefaultServer ensures that there is at least one server running with the default address ":8080".
 // If no server is running, it creates a new server with the default address and starts it.
 // It returns an error if there was a problem creating or starting the server.
