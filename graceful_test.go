@@ -192,11 +192,19 @@ func TestWithServer(t *testing.T) {
 	assert.NoError(t, err)
 	tlsConfig := &tls.Config{
 		Certificates: []tls.Certificate{cert},
+		MinVersion:   tls.VersionTLS12,
 	}
 	testRouterConstructor(t, func() (*Graceful, error) {
 		return Default(
-			WithServer(&http.Server{Addr: ":8811"}),
-			WithServer(&http.Server{Addr: ":9443", TLSConfig: tlsConfig}),
+			WithServer(&http.Server{
+				Addr:              ":8811",
+				ReadHeaderTimeout: 10 * time.Second,
+			}),
+			WithServer(&http.Server{
+				Addr:              ":9443",
+				TLSConfig:         tlsConfig,
+				ReadHeaderTimeout: 10 * time.Second,
+			}),
 		)
 	}, "http://localhost:8811/example", "https://localhost:9443/example")
 }
@@ -212,7 +220,10 @@ func TestWithAll(t *testing.T) {
 		return Default(WithAddr(":8080"),
 			WithTLS(":8443", "./testdata/certificate/cert.pem", "./testdata/certificate/key.pem"),
 			WithListener(listener),
-			WithServer(&http.Server{Addr: ":8811"}),
+			WithServer(&http.Server{
+				Addr:              ":8811",
+				ReadHeaderTimeout: 10 * time.Second,
+			}),
 		)
 	},
 		"http://localhost:8080/example",
