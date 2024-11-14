@@ -1,8 +1,10 @@
 package graceful
 
 import (
+	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 )
 
@@ -44,6 +46,27 @@ func WithTLS(addr string, certFile string, keyFile string) Option {
 			g.lock.Unlock()
 
 			return srv.ListenAndServeTLS(certFile, keyFile)
+		}, donothing, nil
+	})
+}
+
+// WithServer configure an existing http.Server to serve HTTP or HTTPS requests.
+// This allows for a more complete customization of the http.Server,
+// and srv Handler will be set to the current gin.Engine.
+// If srv contains TLSConfig, ListenAndServeTLS will be used;
+// otherwise, ListenAndServe will be used.
+func WithServer(srv *http.Server) Option {
+	return optionFunc(func(g *Graceful) (listenAndServe, cleanup, error) {
+		if srv == nil {
+			return nil, donothing, errors.New("nil http server")
+		}
+		return func() error {
+			g.appendExistHTTPServer(srv)
+			if srv.TLSConfig == nil {
+				return srv.ListenAndServe()
+			} else {
+				return srv.ListenAndServeTLS("", "")
+			}
 		}, donothing, nil
 	})
 }
