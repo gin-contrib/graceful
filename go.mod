@@ -2,11 +2,9 @@ module github.com/gin-contrib/graceful
 
 go 1.21.0
 
-toolchain go1.23.1
-
 require (
 	github.com/gin-gonic/gin v1.10.0
-	github.com/stretchr/testify v1.9.0
+	github.com/stretchr/testify v1.10.0
 	golang.org/x/sync v0.9.0
 )
 
