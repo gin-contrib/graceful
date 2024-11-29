@@ -1,3 +1,6 @@
+// graceful provides a wrapper around the gin.Engine to enable graceful shutdown of HTTP servers.
+// It allows for starting, stopping, and shutting down servers with various configurations, such as
+// listening on TCP addresses, Unix sockets, file descriptors, or custom net.Listeners.
 package graceful
 
 import (
@@ -12,7 +15,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// Graceful is a wrapper around a [gin.Engine] that provides graceful shutdown
+// Graceful wraps a gin.Engine and provides methods to start, stop, and gracefully shut down HTTP servers.
 type Graceful struct {
 	*gin.Engine
 
@@ -26,16 +29,17 @@ type Graceful struct {
 	cleanup        []cleanup
 }
 
-// ErrAlreadyStarted is returned when trying to start a router that has already been started
+// ErrAlreadyStarted is returned when trying to start a router that has already been started.
 var ErrAlreadyStarted = errors.New("already started router")
 
-// ErrNotStarted is returned when trying to stop a router that has not been started
+// ErrNotStarted is returned when trying to stop a router that has not been started.
 var ErrNotStarted = errors.New("router not started")
 
-type (
-	listenAndServe func() error
-	cleanup        func()
-)
+// listenAndServe is a function type that starts an HTTP server and returns an error if it fails.
+type listenAndServe func() error
+
+// cleanup is a function type that performs cleanup operations.
+type cleanup func()
 
 // Default returns a Graceful gin instance with the Logger and Recovery middleware already attached.
 func Default(opts ...Option) (*Graceful, error) {
@@ -58,7 +62,7 @@ func New(router *gin.Engine, opts ...Option) (*Graceful, error) {
 	return g, nil
 }
 
-// Run attaches the router to a http.Server and starts listening and serving HTTP requests.
+// Run attaches the router to an http.Server and starts listening and serving HTTP requests.
 func (g *Graceful) Run(addr ...string) error {
 	for _, a := range addr {
 		if err := g.apply(WithAddr(a)); err != nil {
@@ -69,7 +73,7 @@ func (g *Graceful) Run(addr ...string) error {
 	return g.RunWithContext(context.Background())
 }
 
-// RunTLS attaches the router to a http.Server and starts listening and serving HTTPS (secure) requests.
+// RunTLS attaches the router to an http.Server and starts listening and serving HTTPS (secure) requests.
 func (g *Graceful) RunTLS(addr, certFile, keyFile string) error {
 	if err := g.apply(WithTLS(addr, certFile, keyFile)); err != nil {
 		return err
@@ -78,8 +82,8 @@ func (g *Graceful) RunTLS(addr, certFile, keyFile string) error {
 	return g.RunWithContext(context.Background())
 }
 
-// RunUnix attaches the router to a http.Server and starts listening and serving HTTP requests
-// through the specified unix socket (i.e. a file).
+// RunUnix attaches the router to an http.Server and starts listening and serving HTTP requests
+// through the specified Unix socket (i.e., a file).
 func (g *Graceful) RunUnix(file string) error {
 	if err := g.apply(WithUnix(file)); err != nil {
 		return err
@@ -88,7 +92,7 @@ func (g *Graceful) RunUnix(file string) error {
 	return g.RunWithContext(context.Background())
 }
 
-// RunFd attaches the router to a http.Server and starts listening and serving HTTP requests
+// RunFd attaches the router to an http.Server and starts listening and serving HTTP requests
 // through the specified file descriptor.
 func (g *Graceful) RunFd(fd uintptr) error {
 	if err := g.apply(WithFd(fd)); err != nil {
@@ -98,8 +102,8 @@ func (g *Graceful) RunFd(fd uintptr) error {
 	return g.RunWithContext(context.Background())
 }
 
-// RunListener attaches the router to a http.Server and starts listening and serving HTTP requests
-// through the specified net.Listener
+// RunListener attaches the router to an http.Server and starts listening and serving HTTP requests
+// through the specified net.Listener.
 func (g *Graceful) RunListener(listener net.Listener) error {
 	if err := g.apply(WithListener(listener)); err != nil {
 		return err
@@ -110,7 +114,7 @@ func (g *Graceful) RunListener(listener net.Listener) error {
 
 // RunWithContext attaches the router to the configured http.Server (fallback to configuring one on
 // :8080 if none are configured) and starts listening and serving HTTP requests. If the passed
-// context is canceled, the server is gracefully shut down
+// context is canceled, the server is gracefully shut down.
 func (g *Graceful) RunWithContext(ctx context.Context) error {
 	if err := g.ensureAtLeastDefaultServer(); err != nil {
 		return err
@@ -313,5 +317,3 @@ func waitWithContext(ctx context.Context, eg *errgroup.Group) error {
 		return nil
 	}
 }
-
-func donothing() {}

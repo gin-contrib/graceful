@@ -118,3 +118,5 @@ func listen(g *Graceful, l net.Listener, close cleanup) (listenAndServe, cleanup
 			close()
 		}, nil
 }
+
+func donothing() {}
