@@ -41,6 +41,8 @@ type listenAndServe func() error
 // cleanup is a function type that performs cleanup operations.
 type cleanup func()
 
+var donothing cleanup = func() {}
+
 // Default returns a Graceful gin instance with the Logger and Recovery middleware already attached.
 func Default(opts ...Option) (*Graceful, error) {
 	return New(gin.Default(), opts...)
