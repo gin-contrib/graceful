@@ -1,5 +1,7 @@
 # graceful
 
+English | [繁體中文](README.zh-tw.md) | [简体中文](README.zh-cn.md)
+
 ![Run Tests](https://github.com/gin-contrib/graceful/actions/workflows/go.yml/badge.svg?branch=master)
 ![codecov](https://codecov.io/gh/gin-contrib/graceful/branch/master/graph/badge.svg)
 ![Go Report Card](https://goreportcard.com/badge/github.com/gin-contrib/graceful)
