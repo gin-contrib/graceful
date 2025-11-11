@@ -3,6 +3,7 @@
 [English](README.md) | [繁體中文](README.zh-tw.md) | 简体中文
 
 ![Run Tests](https://github.com/gin-contrib/graceful/actions/workflows/go.yml/badge.svg?branch=master)
+[![Trivy Security Scan](https://github.com/gin-contrib/graceful/actions/workflows/trivy-scan.yml/badge.svg)](https://github.com/gin-contrib/graceful/actions/workflows/trivy-scan.yml)
 ![codecov](https://codecov.io/gh/gin-contrib/graceful/branch/master/graph/badge.svg)
 ![Go Report Card](https://goreportcard.com/badge/github.com/gin-contrib/graceful)
 ![GoDoc](https://godoc.org/github.com/gin-contrib/graceful?status.svg)
