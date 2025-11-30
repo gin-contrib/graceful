@@ -1,6 +1,7 @@
 package graceful
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -74,7 +75,8 @@ func WithServer(srv *http.Server) Option {
 // WithUnix configure a http.Server to listen on the given unix socket file.
 func WithUnix(file string) Option {
 	return optionFunc(func(g *Graceful) (listenAndServe, cleanup, error) {
-		listener, err := net.Listen("unix", file)
+		var lc net.ListenConfig
+		listener, err := lc.Listen(context.Background(), "unix", file)
 		if err != nil {
 			return nil, donothing, err
 		}

@@ -332,7 +332,8 @@ func TestWithUnix(t *testing.T) {
 	// otherwise the main thread will complete
 	time.Sleep(5 * time.Millisecond)
 
-	c, err := net.Dial("unix", unixTestSocket)
+	var d net.Dialer
+	c, err := d.DialContext(context.Background(), "unix", unixTestSocket)
 	assert.NoError(t, err)
 
 	fmt.Fprint(c, "GET /example HTTP/1.0\r\n\r\n")
@@ -366,7 +367,8 @@ func TestRunUnix(t *testing.T) {
 	// otherwise the main thread will complete
 	time.Sleep(5 * time.Millisecond)
 
-	c, err := net.Dial("unix", unixTestSocket)
+	var d net.Dialer
+	c, err := d.DialContext(context.Background(), "unix", unixTestSocket)
 	assert.NoError(t, err)
 
 	fmt.Fprint(c, "GET /example HTTP/1.0\r\n\r\n")
