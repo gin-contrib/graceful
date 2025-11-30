@@ -24,7 +24,7 @@ jobs:
       - name: Setup golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.1
+          version: v2.6
 
       - name: Bearer
         uses: bearer/bearer-action@v2
