@@ -19,6 +19,7 @@ English | [繁體中文](README.zh-tw.md) | [简体中文](README.zh-cn.md)
     - [Server Start Methods](#server-start-methods)
     - [Shutdown and Cleanup Methods](#shutdown-and-cleanup-methods)
     - [Options](#options)
+  - [Lifecycle Hooks Example](#lifecycle-hooks-example)
   - [License](#license)
 
 ## Features
@@ -154,6 +155,12 @@ Various options allow configuration of servers:
   - `WriteTimeout`: Response write timeout (default: 30 seconds)
   - `IdleTimeout`: Keep-alive idle connection timeout (default: 60 seconds)
 
+- **WithBeforeShutdown(hook Hook)**:
+  Register a hook to be called before server shutdown begins. Multiple hooks can be registered and will execute in registration order. Hooks receive the shutdown context and can return errors, which are collected but do not prevent shutdown from proceeding.
+
+- **WithAfterShutdown(hook Hook)**:
+  Register a hook to be called after all servers have shut down. Multiple hooks can be registered and will execute in registration order. Hooks receive the shutdown context and can return errors, which are collected and returned but do not affect server shutdown.
+
 Example with custom timeouts:
 
 ```go
@@ -162,6 +169,76 @@ router, err := graceful.Default(
   graceful.WithServerTimeouts(10*time.Second, 15*time.Second, 30*time.Second),
 )
 ```
+
+## Lifecycle Hooks Example
+
+Lifecycle hooks allow you to execute custom logic during graceful shutdown. Use `WithBeforeShutdown` for cleanup that should happen before servers stop (like deregistering from service discovery), and `WithAfterShutdown` for cleanup after servers have stopped (like closing database connections).
+
+```go
+package main
+
+import (
+  "context"
+  "log"
+  "net/http"
+  "os/signal"
+  "syscall"
+
+  "github.com/gin-contrib/graceful"
+  "github.com/gin-gonic/gin"
+)
+
+func main() {
+  ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+  defer stop()
+
+  router, err := graceful.Default(
+    // BeforeShutdown: called before server shutdown begins
+    graceful.WithBeforeShutdown(func(ctx context.Context) error {
+      log.Println("Notifying load balancer...")
+      // Deregister from load balancer
+      return nil
+    }),
+    graceful.WithBeforeShutdown(func(ctx context.Context) error {
+      log.Println("Stopping background workers...")
+      // Stop accepting new background jobs
+      return nil
+    }),
+
+    // AfterShutdown: called after all servers have shut down
+    graceful.WithAfterShutdown(func(ctx context.Context) error {
+      log.Println("Closing database connections...")
+      // Close database pool
+      return nil
+    }),
+    graceful.WithAfterShutdown(func(ctx context.Context) error {
+      log.Println("Flushing metrics...")
+      // Send final metrics
+      return nil
+    }),
+  )
+  if err != nil {
+    panic(err)
+  }
+  defer router.Close()
+
+  router.GET("/", func(c *gin.Context) {
+    c.String(http.StatusOK, "Welcome Gin Server")
+  })
+
+  if err := router.RunWithContext(ctx); err != nil && err != context.Canceled {
+    panic(err)
+  }
+}
+```
+
+When shutdown is triggered, hooks execute in this order:
+
+1. All `BeforeShutdown` hooks (in registration order)
+2. Server graceful shutdown
+3. All `AfterShutdown` hooks (in registration order)
+
+See the [hooks example](_examples/hooks) for a complete working example.
 
 ---
 

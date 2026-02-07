@@ -6,6 +6,7 @@ package graceful
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"sync"
@@ -46,6 +47,8 @@ type Graceful struct {
 	readTimeout     time.Duration
 	writeTimeout    time.Duration
 	idleTimeout     time.Duration
+	beforeShutdown  []Hook
+	afterShutdown   []Hook
 }
 
 // ErrAlreadyStarted is returned when trying to start a router that has already been started.
@@ -107,6 +110,10 @@ type listenAndServe func() error
 
 // cleanup is a function type that performs cleanup operations.
 type cleanup func()
+
+// Hook is a function type that is called during lifecycle events.
+// It receives a context for cancellation and timeout handling, and returns an error if the hook fails.
+type Hook func(context.Context) error
 
 var donothing cleanup = func() {}
 
@@ -231,12 +238,28 @@ func (g *Graceful) Shutdown(ctx context.Context) error {
 	defer g.lock.Unlock()
 
 	var errs []error
+
+	// Execute BeforeShutdown hooks
+	for _, hook := range g.beforeShutdown {
+		if err := hook(ctx); err != nil {
+			errs = append(errs, fmt.Errorf("before shutdown hook: %w", err))
+		}
+	}
+
+	// Shutdown all servers
 	for _, srv := range g.servers {
 		if e := srv.Shutdown(ctx); e != nil {
 			errs = append(errs, e)
 		}
 	}
 	g.servers = nil
+
+	// Execute AfterShutdown hooks
+	for _, hook := range g.afterShutdown {
+		if err := hook(ctx); err != nil {
+			errs = append(errs, fmt.Errorf("after shutdown hook: %w", err))
+		}
+	}
 
 	if len(errs) > 0 {
 		return errors.Join(errs...)

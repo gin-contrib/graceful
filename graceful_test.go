@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -660,6 +661,202 @@ func TestPartialServerTimeouts(t *testing.T) {
 	// Shutdown
 	err = router.Shutdown(context.Background())
 	assert.NoError(t, err)
+
+	wg.Wait()
+}
+
+func TestWithBeforeShutdownHook(t *testing.T) {
+	var hookExecuted bool
+	router, err := Default(
+		WithBeforeShutdown(func(ctx context.Context) error {
+			hookExecuted = true
+			return nil
+		}),
+	)
+	assert.NoError(t, err)
+	assert.NotNil(t, router)
+	defer router.Close()
+
+	err = router.Shutdown(context.Background())
+	assert.NoError(t, err)
+	assert.True(t, hookExecuted, "BeforeShutdown hook should have been executed")
+}
+
+func TestWithAfterShutdownHook(t *testing.T) {
+	var hookExecuted bool
+	router, err := Default(
+		WithAfterShutdown(func(ctx context.Context) error {
+			hookExecuted = true
+			return nil
+		}),
+	)
+	assert.NoError(t, err)
+	assert.NotNil(t, router)
+	defer router.Close()
+
+	err = router.Shutdown(context.Background())
+	assert.NoError(t, err)
+	assert.True(t, hookExecuted, "AfterShutdown hook should have been executed")
+}
+
+func TestMultipleHooksExecutionOrder(t *testing.T) {
+	var executionOrder []string
+
+	router, err := Default(
+		WithBeforeShutdown(func(ctx context.Context) error {
+			executionOrder = append(executionOrder, "before1")
+			return nil
+		}),
+		WithBeforeShutdown(func(ctx context.Context) error {
+			executionOrder = append(executionOrder, "before2")
+			return nil
+		}),
+		WithAfterShutdown(func(ctx context.Context) error {
+			executionOrder = append(executionOrder, "after1")
+			return nil
+		}),
+		WithAfterShutdown(func(ctx context.Context) error {
+			executionOrder = append(executionOrder, "after2")
+			return nil
+		}),
+	)
+	assert.NoError(t, err)
+	assert.NotNil(t, router)
+	defer router.Close()
+
+	err = router.Shutdown(context.Background())
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"before1", "before2", "after1", "after2"}, executionOrder,
+		"Hooks should execute in registration order")
+}
+
+func TestHookErrorHandling(t *testing.T) {
+	expectedErr := errors.New("hook failed")
+
+	router, err := Default(
+		WithBeforeShutdown(func(ctx context.Context) error {
+			return expectedErr
+		}),
+		WithAfterShutdown(func(ctx context.Context) error {
+			return expectedErr
+		}),
+	)
+	assert.NoError(t, err)
+	assert.NotNil(t, router)
+	defer router.Close()
+
+	err = router.Shutdown(context.Background())
+	assert.Error(t, err, "Shutdown should return hook errors")
+	assert.Contains(t, err.Error(), "before shutdown hook", "Error should identify before shutdown hook")
+	assert.Contains(t, err.Error(), "after shutdown hook", "Error should identify after shutdown hook")
+	assert.Contains(t, err.Error(), "hook failed", "Error should contain original error message")
+}
+
+func TestHookContextCancellation(t *testing.T) {
+	var contextWasCanceled bool
+
+	router, err := Default(
+		WithBeforeShutdown(func(ctx context.Context) error {
+			select {
+			case <-ctx.Done():
+				contextWasCanceled = true
+				return ctx.Err()
+			case <-time.After(10 * time.Second):
+				return errors.New("context should have been canceled")
+			}
+		}),
+	)
+	assert.NoError(t, err)
+	assert.NotNil(t, router)
+	defer router.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // Cancel immediately
+
+	err = router.Shutdown(ctx)
+	assert.Error(t, err, "Should return context cancellation error")
+	assert.True(t, contextWasCanceled, "Hook should have received canceled context")
+}
+
+func TestNilHookValidation(t *testing.T) {
+	_, err := Default(WithBeforeShutdown(nil))
+	assert.Error(t, err, "Should reject nil BeforeShutdown hook")
+	assert.Contains(t, err.Error(), "before shutdown hook cannot be nil")
+
+	_, err = Default(WithAfterShutdown(nil))
+	assert.Error(t, err, "Should reject nil AfterShutdown hook")
+	assert.Contains(t, err.Error(), "after shutdown hook cannot be nil")
+}
+
+func TestHooksCombinedErrorHandling(t *testing.T) {
+	error1 := errors.New("error 1")
+	error2 := errors.New("error 2")
+	error3 := errors.New("error 3")
+
+	router, err := Default(
+		WithBeforeShutdown(func(ctx context.Context) error {
+			return error1
+		}),
+		WithBeforeShutdown(func(ctx context.Context) error {
+			return error2
+		}),
+		WithAfterShutdown(func(ctx context.Context) error {
+			return error3
+		}),
+	)
+	assert.NoError(t, err)
+	assert.NotNil(t, router)
+	defer router.Close()
+
+	err = router.Shutdown(context.Background())
+	assert.Error(t, err, "Should return combined errors")
+
+	// Verify all errors are present in the combined error
+	assert.Contains(t, err.Error(), "error 1")
+	assert.Contains(t, err.Error(), "error 2")
+	assert.Contains(t, err.Error(), "error 3")
+}
+
+func TestHooksWithRunningServer(t *testing.T) {
+	var beforeCalled, afterCalled bool
+
+	router, err := Default(
+		WithAddr(":8091"),
+		WithBeforeShutdown(func(ctx context.Context) error {
+			beforeCalled = true
+			return nil
+		}),
+		WithAfterShutdown(func(ctx context.Context) error {
+			afterCalled = true
+			return nil
+		}),
+	)
+	assert.NoError(t, err)
+	assert.NotNil(t, router)
+	defer router.Close()
+
+	router.GET("/test", func(c *gin.Context) {
+		c.String(http.StatusOK, "it worked")
+	})
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_ = router.RunWithContext(context.Background())
+	}()
+
+	// Wait for server to start
+	time.Sleep(100 * time.Millisecond)
+
+	// Make a request to ensure server is working
+	testRequest(t, "http://localhost:8091/test")
+
+	// Shutdown should trigger both hooks
+	err = router.Shutdown(context.Background())
+	assert.NoError(t, err)
+	assert.True(t, beforeCalled, "BeforeShutdown hook should be called")
+	assert.True(t, afterCalled, "AfterShutdown hook should be called")
 
 	wg.Wait()
 }

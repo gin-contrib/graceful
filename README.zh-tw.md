@@ -19,6 +19,7 @@
     - [伺服器啟動方法](#伺服器啟動方法)
     - [關閉與清理方法](#關閉與清理方法)
     - [選項](#選項)
+  - [生命週期 Hooks 範例](#生命週期-hooks-範例)
   - [授權條款](#授權條款)
 
 ## 特色
@@ -154,6 +155,12 @@ type Graceful struct {
   - `WriteTimeout`：回應寫入逾時（預設：30 秒）
   - `IdleTimeout`：Keep-Alive 閒置連線逾時（預設：60 秒）
 
+- **WithBeforeShutdown(hook Hook)**：
+  註冊一個在伺服器開始關閉前呼叫的 hook。可註冊多個 hooks，將按註冊順序執行。Hooks 會接收到 shutdown context，可回傳錯誤，這些錯誤會被收集但不會阻止關閉流程繼續執行。
+
+- **WithAfterShutdown(hook Hook)**：
+  註冊一個在所有伺服器關閉後呼叫的 hook。可註冊多個 hooks，將按註冊順序執行。Hooks 會接收到 shutdown context，可回傳錯誤，這些錯誤會被收集並回傳，但不影響伺服器關閉流程。
+
 自訂逾時設定範例：
 
 ```go
@@ -162,6 +169,76 @@ router, err := graceful.Default(
   graceful.WithServerTimeouts(10*time.Second, 15*time.Second, 30*time.Second),
 )
 ```
+
+## 生命週期 Hooks 範例
+
+生命週期 hooks 允許你在優雅關閉過程中執行自訂邏輯。使用 `WithBeforeShutdown` 進行應在伺服器停止前的清理工作（如從服務發現中註銷），使用 `WithAfterShutdown` 進行伺服器停止後的清理工作（如關閉資料庫連線）。
+
+```go
+package main
+
+import (
+  "context"
+  "log"
+  "net/http"
+  "os/signal"
+  "syscall"
+
+  "github.com/gin-contrib/graceful"
+  "github.com/gin-gonic/gin"
+)
+
+func main() {
+  ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+  defer stop()
+
+  router, err := graceful.Default(
+    // BeforeShutdown：在伺服器開始關閉前呼叫
+    graceful.WithBeforeShutdown(func(ctx context.Context) error {
+      log.Println("通知負載平衡器...")
+      // 從負載平衡器註銷
+      return nil
+    }),
+    graceful.WithBeforeShutdown(func(ctx context.Context) error {
+      log.Println("停止背景工作程序...")
+      // 停止接收新的背景任務
+      return nil
+    }),
+
+    // AfterShutdown：在所有伺服器關閉後呼叫
+    graceful.WithAfterShutdown(func(ctx context.Context) error {
+      log.Println("關閉資料庫連線...")
+      // 關閉資料庫連線池
+      return nil
+    }),
+    graceful.WithAfterShutdown(func(ctx context.Context) error {
+      log.Println("推送指標資料...")
+      // 傳送最終指標
+      return nil
+    }),
+  )
+  if err != nil {
+    panic(err)
+  }
+  defer router.Close()
+
+  router.GET("/", func(c *gin.Context) {
+    c.String(http.StatusOK, "Welcome Gin Server")
+  })
+
+  if err := router.RunWithContext(ctx); err != nil && err != context.Canceled {
+    panic(err)
+  }
+}
+```
+
+當觸發關閉時，hooks 會按以下順序執行：
+
+1. 所有 `BeforeShutdown` hooks（按註冊順序）
+2. 伺服器優雅關閉
+3. 所有 `AfterShutdown` hooks（按註冊順序）
+
+完整可執行範例請參閱 [hooks 範例](_examples/hooks)。
 
 ---
 

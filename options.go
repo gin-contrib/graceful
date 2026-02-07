@@ -145,6 +145,38 @@ func WithServerTimeouts(readTimeout, writeTimeout, idleTimeout time.Duration) Op
 	})
 }
 
+// WithBeforeShutdown registers a hook to be called before server shutdown begins.
+// Multiple hooks can be registered by calling this option multiple times.
+// Hooks are executed in the order they are registered.
+// Hook errors are collected but do not prevent shutdown from proceeding.
+func WithBeforeShutdown(hook Hook) Option {
+	return optionFunc(func(g *Graceful) (listenAndServe, cleanup, error) {
+		if hook == nil {
+			return nil, nil, errors.New("before shutdown hook cannot be nil")
+		}
+		g.lock.Lock()
+		g.beforeShutdown = append(g.beforeShutdown, hook)
+		g.lock.Unlock()
+		return nil, nil, nil
+	})
+}
+
+// WithAfterShutdown registers a hook to be called after all servers have shut down.
+// Multiple hooks can be registered by calling this option multiple times.
+// Hooks are executed in the order they are registered.
+// Hook errors are collected and returned but do not affect server shutdown.
+func WithAfterShutdown(hook Hook) Option {
+	return optionFunc(func(g *Graceful) (listenAndServe, cleanup, error) {
+		if hook == nil {
+			return nil, nil, errors.New("after shutdown hook cannot be nil")
+		}
+		g.lock.Lock()
+		g.afterShutdown = append(g.afterShutdown, hook)
+		g.lock.Unlock()
+		return nil, nil, nil
+	})
+}
+
 func listen(g *Graceful, l net.Listener, close cleanup) (listenAndServe, cleanup, error) {
 	return func() error {
 			srv := g.appendHTTPServer()
