@@ -480,3 +480,55 @@ func testRequest(t *testing.T, urls ...string) {
 func isWindows() bool {
 	return runtime.GOOS == "windows"
 }
+
+func TestWithShutdownTimeout(t *testing.T) {
+	// Test with custom timeout - verify it doesn't error
+	customTimeout := 5 * time.Second
+	router, err := Default(WithShutdownTimeout(customTimeout))
+	assert.NoError(t, err)
+	assert.NotNil(t, router)
+	defer router.Close()
+
+	// Verify the timeout was set by checking the internal field
+	assert.Equal(t, customTimeout, router.shutdownTimeout)
+
+	// Test with default timeout
+	router2, err := Default()
+	assert.NoError(t, err)
+	assert.NotNil(t, router2)
+	defer router2.Close()
+
+	// Should be zero, meaning it will use DefaultShutdownTimeout
+	assert.Equal(t, time.Duration(0), router2.shutdownTimeout)
+}
+
+func TestShutdownTimeoutInAction(t *testing.T) {
+	// Test that custom timeout can be set and basic shutdown works
+	router, err := Default(WithShutdownTimeout(1 * time.Second))
+	assert.NoError(t, err)
+	assert.NotNil(t, router)
+	defer router.Close()
+
+	router.GET("/example", func(c *gin.Context) {
+		c.String(http.StatusOK, "it worked")
+	})
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_ = router.RunWithContext(context.Background())
+	}()
+
+	// Wait for server to start
+	time.Sleep(100 * time.Millisecond)
+
+	// Make a quick request
+	testRequest(t, "http://localhost:8080/example")
+
+	// Shutdown should work normally with custom timeout
+	err = router.Shutdown(context.Background())
+	assert.NoError(t, err)
+
+	wg.Wait()
+}

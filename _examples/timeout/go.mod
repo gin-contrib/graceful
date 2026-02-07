@@ -1,9 +1,9 @@
 module example
 
-go 1.24.0
+go 1.25.1
 
 require (
-	github.com/gin-contrib/graceful v1.1.1
+	github.com/gin-contrib/graceful v1.1.4
 	github.com/gin-gonic/gin v1.11.0
 )
 
@@ -39,4 +39,4 @@ require (
 	google.golang.org/protobuf v1.36.10 // indirect
 )
 
-replace github.com/gin-contrib/graceful v1.1.1 => ../../
+replace github.com/gin-contrib/graceful v1.1.4 => ../../

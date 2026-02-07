@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"time"
 )
 
 // Option specifies instrumentation configuration options.
@@ -42,9 +43,6 @@ func WithTLS(addr string, certFile string, keyFile string) Option {
 		return func() error {
 			srv := g.appendHTTPServer()
 			srv.Addr = addr
-			g.lock.Lock()
-			g.servers = append(g.servers, srv)
-			g.lock.Unlock()
 
 			return srv.ListenAndServeTLS(certFile, keyFile)
 		}, donothing, nil
@@ -108,6 +106,16 @@ func WithFd(fd uintptr) Option {
 func WithListener(l net.Listener) Option {
 	return optionFunc(func(g *Graceful) (listenAndServe, cleanup, error) {
 		return listen(g, l, donothing)
+	})
+}
+
+// WithShutdownTimeout configures the graceful shutdown timeout.
+// If not set, DefaultShutdownTimeout (30 seconds) will be used.
+// The timeout applies when the server is shutting down and waiting for active connections to close.
+func WithShutdownTimeout(timeout time.Duration) Option {
+	return optionFunc(func(g *Graceful) (listenAndServe, cleanup, error) {
+		g.shutdownTimeout = timeout
+		return nil, nil, nil
 	})
 }
 

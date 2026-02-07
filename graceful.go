@@ -15,6 +15,9 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// DefaultShutdownTimeout is the default timeout for graceful shutdown.
+const DefaultShutdownTimeout = 30 * time.Second
+
 // Graceful wraps a gin.Engine and provides methods to start, stop, and gracefully shut down HTTP servers.
 type Graceful struct {
 	*gin.Engine
@@ -23,10 +26,11 @@ type Graceful struct {
 	stop    context.CancelFunc
 	err     chan error
 
-	lock           sync.Mutex
-	servers        []*http.Server
-	listenAndServe []listenAndServe
-	cleanup        []cleanup
+	lock            sync.Mutex
+	servers         []*http.Server
+	listenAndServe  []listenAndServe
+	cleanup         []cleanup
+	shutdownTimeout time.Duration
 }
 
 // ErrAlreadyStarted is returned when trying to start a router that has already been started.
@@ -34,6 +38,14 @@ var ErrAlreadyStarted = errors.New("already started router")
 
 // ErrNotStarted is returned when trying to stop a router that has not been started.
 var ErrNotStarted = errors.New("router not started")
+
+// getShutdownTimeout returns the configured shutdown timeout or the default if not set.
+func (g *Graceful) getShutdownTimeout() time.Duration {
+	if g.shutdownTimeout > 0 {
+		return g.shutdownTimeout
+	}
+	return DefaultShutdownTimeout
+}
 
 // listenAndServe is a function type that starts an HTTP server and returns an error if it fails.
 type listenAndServe func() error
@@ -125,7 +137,11 @@ func (g *Graceful) RunWithContext(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	go func() {
 		<-ctx.Done()
-		_ = g.Shutdown(ctx)
+		// Create a new context with timeout for graceful shutdown
+		// Cannot reuse the canceled ctx as it would cause immediate timeout
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), g.getShutdownTimeout())
+		defer shutdownCancel()
+		_ = g.Shutdown(shutdownCtx)
 	}()
 	defer cancel()
 
@@ -148,24 +164,29 @@ func (g *Graceful) RunWithContext(ctx context.Context) error {
 	if err := waitWithContext(ctx, &eg); err != nil {
 		return err
 	}
-	return g.Shutdown(ctx)
+	// Use a fresh context with timeout for final shutdown
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), g.getShutdownTimeout())
+	defer shutdownCancel()
+	return g.Shutdown(shutdownCtx)
 }
 
 // Shutdown gracefully shuts down the server without interrupting any active connections.
 func (g *Graceful) Shutdown(ctx context.Context) error {
-	var err error
-
 	g.lock.Lock()
 	defer g.lock.Unlock()
 
+	var errs []error
 	for _, srv := range g.servers {
 		if e := srv.Shutdown(ctx); e != nil {
-			err = e
+			errs = append(errs, e)
 		}
 	}
 	g.servers = nil
 
-	return err
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
+	return nil
 }
 
 // Start will start the Graceful instance and all underlying http.Servers in a separate
@@ -260,8 +281,14 @@ func (g *Graceful) apply(o Option) error {
 	if err != nil {
 		return err
 	}
-	g.listenAndServe = append(g.listenAndServe, srv)
-	g.cleanup = append(g.cleanup, cleanup)
+	// Only append non-nil listenAndServe functions (for server options)
+	// Configuration options like WithShutdownTimeout return nil
+	if srv != nil {
+		g.listenAndServe = append(g.listenAndServe, srv)
+	}
+	if cleanup != nil {
+		g.cleanup = append(g.cleanup, cleanup)
+	}
 	return nil
 }
 
