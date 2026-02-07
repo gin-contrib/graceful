@@ -41,8 +41,12 @@ var ErrNotStarted = errors.New("router not started")
 
 // getShutdownTimeout returns the configured shutdown timeout or the default if not set.
 func (g *Graceful) getShutdownTimeout() time.Duration {
-	if g.shutdownTimeout > 0 {
-		return g.shutdownTimeout
+	g.lock.Lock()
+	timeout := g.shutdownTimeout
+	g.lock.Unlock()
+
+	if timeout > 0 {
+		return timeout
 	}
 	return DefaultShutdownTimeout
 }
@@ -281,6 +285,10 @@ func (g *Graceful) apply(o Option) error {
 	if err != nil {
 		return err
 	}
+
+	g.lock.Lock()
+	defer g.lock.Unlock()
+
 	// Only append non-nil listenAndServe functions (for server options)
 	// Configuration options like WithShutdownTimeout return nil
 	if srv != nil {
@@ -322,9 +330,10 @@ func (g *Graceful) appendExistHTTPServer(srv *http.Server) {
 // It returns an error if there was a problem creating or starting the server.
 func (g *Graceful) ensureAtLeastDefaultServer() error {
 	g.lock.Lock()
-	defer g.lock.Unlock()
+	hasServers := len(g.listenAndServe) > 0
+	g.lock.Unlock()
 
-	if len(g.listenAndServe) == 0 {
+	if !hasServers {
 		if err := g.apply(WithAddr(":8080")); err != nil {
 			return err
 		}

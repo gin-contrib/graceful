@@ -114,7 +114,9 @@ func WithListener(l net.Listener) Option {
 // The timeout applies when the server is shutting down and waiting for active connections to close.
 func WithShutdownTimeout(timeout time.Duration) Option {
 	return optionFunc(func(g *Graceful) (listenAndServe, cleanup, error) {
+		g.lock.Lock()
 		g.shutdownTimeout = timeout
+		g.lock.Unlock()
 		return nil, nil, nil
 	})
 }
