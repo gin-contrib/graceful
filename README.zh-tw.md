@@ -88,7 +88,7 @@ type Graceful struct {
 - **Default(opts ...Option) \*Graceful, error**：  
   建立具預設 Gin middleware 的 `Graceful` 實例。
 
-- **New(router *gin.Engine, opts ...Option) \*Graceful, error**：  
+- **New(router \*gin.Engine, opts ...Option) \*Graceful, error**：  
   包裝現有 `gin.Engine`。
 
 - **Run(addr ...string) error**：  
@@ -125,7 +125,43 @@ type Graceful struct {
 
 ### 選項
 
-各種選項（參見程式碼 `Option` 介面 / 實作）允許設定伺服器，包括自訂位址、TLS、Unix socket、檔案描述符與 listener。
+各種選項允許設定伺服器：
+
+- **WithAddr(addr string)**：
+  設定 HTTP 伺服器監聽指定 TCP 位址。
+
+- **WithTLS(addr, certFile, keyFile string)**：
+  設定 HTTPS 伺服器與 TLS 憑證。
+
+- **WithUnix(file string)**：
+  設定伺服器監聽 Unix socket。
+
+- **WithFd(fd uintptr)**：
+  設定伺服器監聽檔案描述符。
+
+- **WithListener(listener net.Listener)**：
+  設定伺服器使用自訂 listener。
+
+- **WithServer(srv \*http.Server)**：
+  使用現有 `http.Server` 進行完整自訂。
+
+- **WithShutdownTimeout(timeout time.Duration)**：
+  設定優雅關閉逾時時間（預設：30 秒）。
+
+- **WithServerTimeouts(readTimeout, writeTimeout, idleTimeout time.Duration)**：
+  設定 HTTP 伺服器逾時時間：
+  - `ReadTimeout`：完整請求讀取逾時（包含請求主體，預設：15 秒）
+  - `WriteTimeout`：回應寫入逾時（預設：30 秒）
+  - `IdleTimeout`：Keep-Alive 閒置連線逾時（預設：60 秒）
+
+自訂逾時設定範例：
+
+```go
+router, err := graceful.Default(
+  graceful.WithShutdownTimeout(10 * time.Second),
+  graceful.WithServerTimeouts(10*time.Second, 15*time.Second, 30*time.Second),
+)
+```
 
 ---
 

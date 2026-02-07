@@ -88,7 +88,7 @@ type Graceful struct {
 - **Default(opts ...Option) \*Graceful, error**:  
   Creates a `Graceful` instance with default Gin middleware.
 
-- **New(router *gin.Engine, opts ...Option) \*Graceful, error**:  
+- **New(router \*gin.Engine, opts ...Option) \*Graceful, error**:  
   Wraps an existing `gin.Engine`.
 
 - **Run(addr ...string) error**:  
@@ -125,7 +125,43 @@ type Graceful struct {
 
 ### Options
 
-Various options (see code for `Option` interface/implementations) allow configuration of servers, including custom addresses, TLS, Unix sockets, file descriptors, and listeners.
+Various options allow configuration of servers:
+
+- **WithAddr(addr string)**:
+  Configure HTTP server to listen on the given TCP address.
+
+- **WithTLS(addr, certFile, keyFile string)**:
+  Configure HTTPS server with TLS certificates.
+
+- **WithUnix(file string)**:
+  Configure server to listen on Unix socket.
+
+- **WithFd(fd uintptr)**:
+  Configure server to listen on file descriptor.
+
+- **WithListener(listener net.Listener)**:
+  Configure server to use custom listener.
+
+- **WithServer(srv \*http.Server)**:
+  Configure with an existing `http.Server` for full customization.
+
+- **WithShutdownTimeout(timeout time.Duration)**:
+  Configure graceful shutdown timeout (default: 30 seconds).
+
+- **WithServerTimeouts(readTimeout, writeTimeout, idleTimeout time.Duration)**:
+  Configure HTTP server timeouts:
+  - `ReadTimeout`: Complete request read timeout including body (default: 15 seconds)
+  - `WriteTimeout`: Response write timeout (default: 30 seconds)
+  - `IdleTimeout`: Keep-alive idle connection timeout (default: 60 seconds)
+
+Example with custom timeouts:
+
+```go
+router, err := graceful.Default(
+  graceful.WithShutdownTimeout(10 * time.Second),
+  graceful.WithServerTimeouts(10*time.Second, 15*time.Second, 30*time.Second),
+)
+```
 
 ---
 

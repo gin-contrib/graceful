@@ -121,6 +121,30 @@ func WithShutdownTimeout(timeout time.Duration) Option {
 	})
 }
 
+// WithServerTimeouts configures the HTTP server timeouts.
+// If not set, default timeouts will be used:
+//   - ReadTimeout: 15 seconds (complete request read timeout including body)
+//   - WriteTimeout: 30 seconds (response write timeout)
+//   - IdleTimeout: 60 seconds (keep-alive idle connection timeout)
+//
+// Pass 0 for any timeout to use the default value.
+func WithServerTimeouts(readTimeout, writeTimeout, idleTimeout time.Duration) Option {
+	return optionFunc(func(g *Graceful) (listenAndServe, cleanup, error) {
+		g.lock.Lock()
+		if readTimeout > 0 {
+			g.readTimeout = readTimeout
+		}
+		if writeTimeout > 0 {
+			g.writeTimeout = writeTimeout
+		}
+		if idleTimeout > 0 {
+			g.idleTimeout = idleTimeout
+		}
+		g.lock.Unlock()
+		return nil, nil, nil
+	})
+}
+
 func listen(g *Graceful, l net.Listener, close cleanup) (listenAndServe, cleanup, error) {
 	return func() error {
 			srv := g.appendHTTPServer()

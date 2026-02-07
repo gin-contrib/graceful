@@ -18,6 +18,18 @@ import (
 // DefaultShutdownTimeout is the default timeout for graceful shutdown.
 const DefaultShutdownTimeout = 30 * time.Second
 
+// DefaultReadTimeout is the default timeout for reading the entire request, including the body.
+const DefaultReadTimeout = 15 * time.Second
+
+// DefaultWriteTimeout is the default timeout for writing the response.
+const DefaultWriteTimeout = 30 * time.Second
+
+// DefaultIdleTimeout is the default timeout for idle keep-alive connections.
+const DefaultIdleTimeout = 60 * time.Second
+
+// DefaultReadHeaderTimeout is the default timeout for reading request headers.
+const DefaultReadHeaderTimeout = 5 * time.Second
+
 // Graceful wraps a gin.Engine and provides methods to start, stop, and gracefully shut down HTTP servers.
 type Graceful struct {
 	*gin.Engine
@@ -31,6 +43,9 @@ type Graceful struct {
 	listenAndServe  []listenAndServe
 	cleanup         []cleanup
 	shutdownTimeout time.Duration
+	readTimeout     time.Duration
+	writeTimeout    time.Duration
+	idleTimeout     time.Duration
 }
 
 // ErrAlreadyStarted is returned when trying to start a router that has already been started.
@@ -49,6 +64,42 @@ func (g *Graceful) getShutdownTimeout() time.Duration {
 		return timeout
 	}
 	return DefaultShutdownTimeout
+}
+
+// getReadTimeout returns the configured read timeout or the default if not set.
+func (g *Graceful) getReadTimeout() time.Duration {
+	g.lock.Lock()
+	timeout := g.readTimeout
+	g.lock.Unlock()
+
+	if timeout > 0 {
+		return timeout
+	}
+	return DefaultReadTimeout
+}
+
+// getWriteTimeout returns the configured write timeout or the default if not set.
+func (g *Graceful) getWriteTimeout() time.Duration {
+	g.lock.Lock()
+	timeout := g.writeTimeout
+	g.lock.Unlock()
+
+	if timeout > 0 {
+		return timeout
+	}
+	return DefaultWriteTimeout
+}
+
+// getIdleTimeout returns the configured idle timeout or the default if not set.
+func (g *Graceful) getIdleTimeout() time.Duration {
+	g.lock.Lock()
+	timeout := g.idleTimeout
+	g.lock.Unlock()
+
+	if timeout > 0 {
+		return timeout
+	}
+	return DefaultIdleTimeout
 }
 
 // listenAndServe is a function type that starts an HTTP server and returns an error if it fails.
@@ -301,11 +352,14 @@ func (g *Graceful) apply(o Option) error {
 }
 
 // appendHTTPServer appends a new HTTP server to the list of servers managed by the Graceful instance.
-// It returns the newly created http.Server.
+// It returns the newly created http.Server with configured timeouts.
 func (g *Graceful) appendHTTPServer() *http.Server {
 	srv := &http.Server{
 		Handler:           g.Engine,
-		ReadHeaderTimeout: time.Second * 5, // Set a reasonable ReadHeaderTimeout value
+		ReadTimeout:       g.getReadTimeout(),
+		WriteTimeout:      g.getWriteTimeout(),
+		IdleTimeout:       g.getIdleTimeout(),
+		ReadHeaderTimeout: DefaultReadHeaderTimeout,
 	}
 
 	g.lock.Lock()

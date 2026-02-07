@@ -88,7 +88,7 @@ type Graceful struct {
 - **Default(opts ...Option) \*Graceful, error**：  
   创建一个带默认 Gin 中间件的 `Graceful` 实例。
 
-- **New(router *gin.Engine, opts ...Option) \*Graceful, error**：  
+- **New(router \*gin.Engine, opts ...Option) \*Graceful, error**：  
   封装已有 `gin.Engine`。
 
 - **Run(addr ...string) error**：  
@@ -125,7 +125,43 @@ type Graceful struct {
 
 ### 选项
 
-多种选项（详见代码 `Option` 接口及实现），可配置服务器，包括自定义地址、TLS、Unix socket、文件描述符和 listener。
+多种选项可配置服务器：
+
+- **WithAddr(addr string)**：
+  配置 HTTP 服务器监听指定 TCP 地址。
+
+- **WithTLS(addr, certFile, keyFile string)**：
+  配置 HTTPS 服务器与 TLS 证书。
+
+- **WithUnix(file string)**：
+  配置服务器监听 Unix socket。
+
+- **WithFd(fd uintptr)**：
+  配置服务器监听文件描述符。
+
+- **WithListener(listener net.Listener)**：
+  配置服务器使用自定义 listener。
+
+- **WithServer(srv \*http.Server)**：
+  使用现有 `http.Server` 进行完整自定义。
+
+- **WithShutdownTimeout(timeout time.Duration)**：
+  配置优雅关闭超时时间（默认：30 秒）。
+
+- **WithServerTimeouts(readTimeout, writeTimeout, idleTimeout time.Duration)**：
+  配置 HTTP 服务器超时时间：
+  - `ReadTimeout`：完整请求读取超时（包含请求体，默认：15 秒）
+  - `WriteTimeout`：响应写入超时（默认：30 秒）
+  - `IdleTimeout`：Keep-Alive 空闲连接超时（默认：60 秒）
+
+自定义超时设置示例：
+
+```go
+router, err := graceful.Default(
+  graceful.WithShutdownTimeout(10 * time.Second),
+  graceful.WithServerTimeouts(10*time.Second, 15*time.Second, 30*time.Second),
+)
+```
 
 ---
 

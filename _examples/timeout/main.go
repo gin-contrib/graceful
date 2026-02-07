@@ -15,10 +15,15 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	// Create a graceful router with custom shutdown timeout
-	// This ensures the server will wait up to 10 seconds for active connections to close
+	// Create a graceful router with custom timeouts
+	// - ShutdownTimeout: wait up to 10 seconds for active connections to close during shutdown
+	// - ServerTimeouts: configure HTTP server timeouts
+	//   * ReadTimeout: 10 seconds - complete request read timeout including body
+	//   * WriteTimeout: 15 seconds - response write timeout
+	//   * IdleTimeout: 30 seconds - keep-alive idle connection timeout
 	router, err := graceful.Default(
-		graceful.WithShutdownTimeout(10 * time.Second),
+		graceful.WithShutdownTimeout(10*time.Second),
+		graceful.WithServerTimeouts(10*time.Second, 15*time.Second, 30*time.Second),
 	)
 	if err != nil {
 		panic(err)

@@ -532,3 +532,134 @@ func TestShutdownTimeoutInAction(t *testing.T) {
 
 	wg.Wait()
 }
+
+func TestWithServerTimeouts(t *testing.T) {
+	// Test with custom server timeouts
+	customRead := 10 * time.Second
+	customWrite := 20 * time.Second
+	customIdle := 30 * time.Second
+
+	router, err := Default(
+		WithAddr(":8088"),
+		WithServerTimeouts(customRead, customWrite, customIdle),
+	)
+	assert.NoError(t, err)
+	assert.NotNil(t, router)
+	defer router.Close()
+
+	// Verify the timeouts were set by checking the internal fields
+	assert.Equal(t, customRead, router.readTimeout)
+	assert.Equal(t, customWrite, router.writeTimeout)
+	assert.Equal(t, customIdle, router.idleTimeout)
+
+	// Start the server to verify it works with custom timeouts
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_ = router.RunWithContext(context.Background())
+	}()
+
+	// Wait for server to start
+	time.Sleep(100 * time.Millisecond)
+
+	// Verify the server was created with correct timeouts
+	router.lock.Lock()
+	assert.Equal(t, 1, len(router.servers))
+	srv := router.servers[0]
+	assert.Equal(t, customRead, srv.ReadTimeout)
+	assert.Equal(t, customWrite, srv.WriteTimeout)
+	assert.Equal(t, customIdle, srv.IdleTimeout)
+	assert.Equal(t, DefaultReadHeaderTimeout, srv.ReadHeaderTimeout)
+	router.lock.Unlock()
+
+	// Shutdown
+	err = router.Shutdown(context.Background())
+	assert.NoError(t, err)
+
+	wg.Wait()
+}
+
+func TestDefaultServerTimeouts(t *testing.T) {
+	// Test with default timeouts (no WithServerTimeouts option)
+	router, err := Default(WithAddr(":8089"))
+	assert.NoError(t, err)
+	assert.NotNil(t, router)
+	defer router.Close()
+
+	// Should be zero, meaning it will use default values
+	assert.Equal(t, time.Duration(0), router.readTimeout)
+	assert.Equal(t, time.Duration(0), router.writeTimeout)
+	assert.Equal(t, time.Duration(0), router.idleTimeout)
+
+	// Start the server
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_ = router.RunWithContext(context.Background())
+	}()
+
+	// Wait for server to start
+	time.Sleep(100 * time.Millisecond)
+
+	// Verify the server was created with default timeouts
+	router.lock.Lock()
+	assert.Equal(t, 1, len(router.servers))
+	srv := router.servers[0]
+	assert.Equal(t, DefaultReadTimeout, srv.ReadTimeout)
+	assert.Equal(t, DefaultWriteTimeout, srv.WriteTimeout)
+	assert.Equal(t, DefaultIdleTimeout, srv.IdleTimeout)
+	assert.Equal(t, DefaultReadHeaderTimeout, srv.ReadHeaderTimeout)
+	router.lock.Unlock()
+
+	// Shutdown
+	err = router.Shutdown(context.Background())
+	assert.NoError(t, err)
+
+	wg.Wait()
+}
+
+func TestPartialServerTimeouts(t *testing.T) {
+	// Test with partial custom timeouts (some zero values)
+	customRead := 25 * time.Second
+
+	router, err := Default(
+		WithAddr(":8090"),
+		WithServerTimeouts(customRead, 0, 0), // Only set read timeout
+	)
+	assert.NoError(t, err)
+	assert.NotNil(t, router)
+	defer router.Close()
+
+	// Verify only the read timeout was set
+	assert.Equal(t, customRead, router.readTimeout)
+	assert.Equal(t, time.Duration(0), router.writeTimeout)
+	assert.Equal(t, time.Duration(0), router.idleTimeout)
+
+	// Start the server
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_ = router.RunWithContext(context.Background())
+	}()
+
+	// Wait for server to start
+	time.Sleep(100 * time.Millisecond)
+
+	// Verify the server was created with correct timeouts
+	router.lock.Lock()
+	assert.Equal(t, 1, len(router.servers))
+	srv := router.servers[0]
+	assert.Equal(t, customRead, srv.ReadTimeout)
+	assert.Equal(t, DefaultWriteTimeout, srv.WriteTimeout) // Should use default
+	assert.Equal(t, DefaultIdleTimeout, srv.IdleTimeout)   // Should use default
+	router.lock.Unlock()
+
+	// Shutdown
+	err = router.Shutdown(context.Background())
+	assert.NoError(t, err)
+
+	wg.Wait()
+}
