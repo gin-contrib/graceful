@@ -197,7 +197,7 @@ func (g *Graceful) RunWithContext(ctx context.Context) error {
 	}
 
 	ctx, cancel := context.WithCancel(ctx)
-	go func() {
+	go func() { //nolint:gosec // shutdown goroutine intentionally uses a fresh context after parent cancellation
 		<-ctx.Done()
 		// Create a new context with timeout for graceful shutdown
 		// Cannot reuse the canceled ctx as it would cause immediate timeout
@@ -279,7 +279,7 @@ func (g *Graceful) Start() error {
 
 	g.err = make(chan error)
 	ctxStarted, cancel := context.WithCancel(context.Background())
-	ctx, cancelStop := context.WithCancel(context.Background())
+	ctx, cancelStop := context.WithCancel(context.Background()) //nolint:gosec // cancelStop is stored as g.stop and invoked from Stop()
 	go func() {
 		err := g.RunWithContext(ctx)
 		cancel()
