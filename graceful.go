@@ -279,7 +279,8 @@ func (g *Graceful) Start() error {
 
 	g.err = make(chan error)
 	ctxStarted, cancel := context.WithCancel(context.Background())
-	ctx, cancelStop := context.WithCancel(context.Background()) //nolint:gosec // cancelStop is stored as g.stop and invoked from Stop()
+	// cancelStop is stored as g.stop and invoked from Stop()
+	ctx, cancelStop := context.WithCancel(context.Background()) //nolint:gosec
 	go func() {
 		err := g.RunWithContext(ctx)
 		cancel()
