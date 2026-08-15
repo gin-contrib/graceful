@@ -5,7 +5,7 @@
 ![Run Tests](https://github.com/gin-contrib/graceful/actions/workflows/go.yml/badge.svg?branch=master)
 [![Trivy Security Scan](https://github.com/gin-contrib/graceful/actions/workflows/trivy-scan.yml/badge.svg)](https://github.com/gin-contrib/graceful/actions/workflows/trivy-scan.yml)
 ![codecov](https://codecov.io/gh/gin-contrib/graceful/branch/master/graph/badge.svg)
-![GoDoc](https://godoc.org/github.com/gin-contrib/graceful?status.svg)
+[![Go Reference](https://pkg.go.dev/badge/github.com/gin-contrib/graceful.svg)](https://pkg.go.dev/github.com/gin-contrib/graceful)
 
 **graceful** 是 Gin 的一個包裝器，為 HTTP 伺服器提供強大且靈活的優雅關閉能力。它允許你啟動、停止及平滑地關閉伺服器，並支援各種監聽方式，包括 TCP、Unix socket、檔案描述符或自訂 listener。
 

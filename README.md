@@ -5,7 +5,7 @@ English | [繁體中文](README.zh-tw.md) | [简体中文](README.zh-cn.md)
 ![Run Tests](https://github.com/gin-contrib/graceful/actions/workflows/go.yml/badge.svg?branch=master)
 [![Trivy Security Scan](https://github.com/gin-contrib/graceful/actions/workflows/trivy-scan.yml/badge.svg)](https://github.com/gin-contrib/graceful/actions/workflows/trivy-scan.yml)
 ![codecov](https://codecov.io/gh/gin-contrib/graceful/branch/master/graph/badge.svg)
-![GoDoc](https://godoc.org/github.com/gin-contrib/graceful?status.svg)
+[![Go Reference](https://pkg.go.dev/badge/github.com/gin-contrib/graceful.svg)](https://pkg.go.dev/github.com/gin-contrib/graceful)
 
 **graceful** is a wrapper for Gin that provides robust and flexible graceful shutdown capabilities for HTTP servers. It allows you to start, stop, and smoothly shut down servers, supporting various listen mechanisms including TCP, Unix sockets, file descriptors, or custom listeners.
 
