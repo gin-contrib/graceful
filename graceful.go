@@ -201,7 +201,10 @@ func (g *Graceful) RunWithContext(ctx context.Context) error {
 		<-ctx.Done()
 		// Create a new context with timeout for graceful shutdown
 		// Cannot reuse the canceled ctx as it would cause immediate timeout
-		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), g.getShutdownTimeout())
+		shutdownCtx, shutdownCancel := context.WithTimeout(
+			context.Background(),
+			g.getShutdownTimeout(),
+		)
 		defer shutdownCancel()
 		_ = g.Shutdown(shutdownCtx)
 	}()
@@ -280,7 +283,9 @@ func (g *Graceful) Start() error {
 	g.err = make(chan error)
 	ctxStarted, cancel := context.WithCancel(context.Background())
 	// cancelStop is stored as g.stop and invoked from Stop()
-	ctx, cancelStop := context.WithCancel(context.Background()) //nolint:gosec
+	ctx, cancelStop := context.WithCancel(
+		context.Background(),
+	) //nolint:gosec // server.Context() controls lifecycle
 	go func() {
 		err := g.RunWithContext(ctx)
 		cancel()

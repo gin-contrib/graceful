@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gin-contrib/graceful"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -56,7 +57,10 @@ func main() {
 	defer router.Close()
 
 	router.GET("/", func(c *gin.Context) {
-		c.String(http.StatusOK, "Welcome! Try stopping the server with Ctrl+C to see lifecycle hooks in action.")
+		c.String(
+			http.StatusOK,
+			"Welcome! Try stopping the server with Ctrl+C to see lifecycle hooks in action.",
+		)
 	})
 
 	router.GET("/health", func(c *gin.Context) {
@@ -67,7 +71,10 @@ func main() {
 	log.Println("Send SIGTERM (Ctrl+C) to trigger graceful shutdown with lifecycle hooks")
 
 	go func() {
-		if err := router.RunWithContext(context.Background()); err != nil && err != context.Canceled {
+		if err := router.RunWithContext(
+			context.Background(),
+		); err != nil &&
+			err != context.Canceled {
 			panic(err)
 		}
 	}()

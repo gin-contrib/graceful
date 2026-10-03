@@ -38,7 +38,7 @@ func WithAddr(addr string) Option {
 }
 
 // WithTLS configure a http.Server to listen on the given address and serve HTTPS requests.
-func WithTLS(addr string, certFile string, keyFile string) Option {
+func WithTLS(addr, certFile, keyFile string) Option {
 	return optionFunc(func(g *Graceful) (listenAndServe, cleanup, error) {
 		return func() error {
 			srv := g.appendHTTPServer()
@@ -177,12 +177,12 @@ func WithAfterShutdown(hook Hook) Option {
 	})
 }
 
-func listen(g *Graceful, l net.Listener, close cleanup) (listenAndServe, cleanup, error) {
+func listen(g *Graceful, l net.Listener, shut cleanup) (listenAndServe, cleanup, error) {
 	return func() error {
 			srv := g.appendHTTPServer()
 
 			return srv.Serve(l)
 		}, func() {
-			close()
+			shut()
 		}, nil
 }
