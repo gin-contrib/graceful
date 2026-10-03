@@ -7,6 +7,7 @@ import (
 	"syscall"
 
 	"github.com/gin-contrib/graceful"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -25,7 +26,10 @@ func main() {
 	})
 
 	go func() {
-		if err := router.RunWithContext(context.Background()); err != nil && err != context.Canceled {
+		if err := router.RunWithContext(
+			context.Background(),
+		); err != nil &&
+			err != context.Canceled {
 			panic(err)
 		}
 	}()

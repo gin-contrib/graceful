@@ -21,6 +21,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestDefault(t *testing.T) {
@@ -37,12 +38,12 @@ func TestWithAddr(t *testing.T) {
 
 func TestCycle(t *testing.T) {
 	router, err := Default()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, router)
 
 	router.GET("/example", func(c *gin.Context) { c.String(http.StatusOK, "it worked") })
 
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		ctxEnd, cancelEnd := context.WithCancel(context.Background())
 		ctxService, cancelService := context.WithCancel(context.Background())
 
@@ -60,7 +61,7 @@ func TestCycle(t *testing.T) {
 
 func TestSimpleSignal(t *testing.T) {
 	router, err := Default()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, router)
 	defer router.Close()
 
@@ -76,28 +77,22 @@ func TestSimpleSignal(t *testing.T) {
 
 	var wg sync.WaitGroup
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		assert.NoError(t, router.RunWithContext(context.Background()))
-	}()
+	})
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		time.Sleep(5 * time.Second)
 		assert.NoError(t, syscall.Kill(syscall.Getpid(), syscall.SIGINT))
-	}()
+	})
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		testRequest(t, "http://localhost:8080/example")
-	}()
+	})
 
 	<-ctx.Done()
 
-	assert.NoError(t, router.Shutdown(context.Background()))
+	require.NoError(t, router.Shutdown(context.Background()))
 	assert.GreaterOrEqual(t, time.Since(start).Seconds(), 20.0)
 
 	wg.Wait()
@@ -105,7 +100,7 @@ func TestSimpleSignal(t *testing.T) {
 
 func TestSimpleSleep(t *testing.T) {
 	router, err := Default()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, router)
 	defer router.Close()
 
@@ -117,21 +112,17 @@ func TestSimpleSleep(t *testing.T) {
 	start := time.Now()
 	var wg sync.WaitGroup
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		assert.NoError(t, router.RunWithContext(context.Background()))
-	}()
+	})
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		testRequest(t, "http://localhost:8080/example")
-	}()
+	})
 
 	time.Sleep(5 * time.Second)
 
-	assert.NoError(t, router.Shutdown(context.Background()))
+	require.NoError(t, router.Shutdown(context.Background()))
 	assert.GreaterOrEqual(t, time.Since(start).Seconds(), 20.0)
 
 	wg.Wait()
@@ -139,13 +130,13 @@ func TestSimpleSleep(t *testing.T) {
 
 func TestSimpleCycle(t *testing.T) {
 	router, err := Default()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, router)
 
 	router.GET("/example", func(c *gin.Context) { c.String(http.StatusOK, "it worked") })
 
-	for i := 0; i < 10; i++ {
-		assert.NoError(t, router.Start())
+	for range 10 {
+		require.NoError(t, router.Start())
 		testRequest(t, "http://localhost:8080/example")
 		assert.NoError(t, router.Stop())
 	}
@@ -153,22 +144,24 @@ func TestSimpleCycle(t *testing.T) {
 
 func TestWithTLS(t *testing.T) {
 	testRouterConstructor(t, func() (*Graceful, error) {
-		return Default(WithTLS(":8443", "./testdata/certificate/cert.pem", "./testdata/certificate/key.pem"))
+		return Default(
+			WithTLS(":8443", "./testdata/certificate/cert.pem", "./testdata/certificate/key.pem"),
+		)
 	}, "https://localhost:8443/example")
 }
 
 func TestWithFd(t *testing.T) {
 	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	listener, err := net.ListenTCP("tcp", addr)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer listener.Close()
 	socketFile, err := listener.File()
 	if isWindows() {
 		assert.Error(t, err)
 		return
 	}
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer socketFile.Close()
 
 	testRouterConstructor(t, func() (*Graceful, error) {
@@ -178,9 +171,9 @@ func TestWithFd(t *testing.T) {
 
 func TestWithListener(t *testing.T) {
 	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	listener, err := net.ListenTCP("tcp", addr)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer listener.Close()
 
 	testRouterConstructor(t, func() (*Graceful, error) {
@@ -189,8 +182,11 @@ func TestWithListener(t *testing.T) {
 }
 
 func TestWithServer(t *testing.T) {
-	cert, err := tls.LoadX509KeyPair("./testdata/certificate/cert.pem", "./testdata/certificate/key.pem")
-	assert.NoError(t, err)
+	cert, err := tls.LoadX509KeyPair(
+		"./testdata/certificate/cert.pem",
+		"./testdata/certificate/key.pem",
+	)
+	require.NoError(t, err)
 	tlsConfig := &tls.Config{
 		Certificates: []tls.Certificate{cert},
 		MinVersion:   tls.VersionTLS12,
@@ -212,9 +208,9 @@ func TestWithServer(t *testing.T) {
 
 func TestWithAll(t *testing.T) {
 	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	listener, err := net.ListenTCP("tcp", addr)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer listener.Close()
 
 	testRouterConstructor(t, func() (*Graceful, error) {
@@ -236,7 +232,7 @@ func TestWithAll(t *testing.T) {
 
 func TestWithContext(t *testing.T) {
 	router, err := Default()
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, router)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -257,17 +253,22 @@ func TestWithContext(t *testing.T) {
 	cancel()
 	<-ctx.Done()
 
-	req, err := http.NewRequestWithContext(context.Background(), "GET", "http://localhost:8080/example", nil)
-	assert.NoError(t, err)
+	req, err := http.NewRequestWithContext(
+		context.Background(),
+		http.MethodGet,
+		"http://localhost:8080/example",
+		nil,
+	)
+	require.NoError(t, err)
 	client := &http.Client{Transport: &http.Transport{}}
 	resp, err := client.Do(req)
 	if resp != nil {
 		defer resp.Body.Close()
 	}
-	assert.Error(t, err)
+	require.Error(t, err)
 
 	err = router.Shutdown(context.Background())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	router.Close()
 }
@@ -280,22 +281,26 @@ func TestRunAddr(t *testing.T) {
 
 func TestRunTLS(t *testing.T) {
 	testRouterRun(t, func(g *Graceful) error {
-		return g.RunTLS(":8443", "./testdata/certificate/cert.pem", "./testdata/certificate/key.pem")
+		return g.RunTLS(
+			":8443",
+			"./testdata/certificate/cert.pem",
+			"./testdata/certificate/key.pem",
+		)
 	}, "https://localhost:8443/example")
 }
 
 func TestRunFd(t *testing.T) {
 	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	listener, err := net.ListenTCP("tcp", addr)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer listener.Close()
 	socketFile, err := listener.File()
 	if isWindows() {
 		assert.Error(t, err)
 		return
 	}
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer socketFile.Close()
 
 	testRouterRun(t, func(g *Graceful) error {
@@ -305,9 +310,9 @@ func TestRunFd(t *testing.T) {
 
 func TestRunListener(t *testing.T) {
 	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	listener, err := net.ListenTCP("tcp", addr)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer listener.Close()
 
 	testRouterRun(t, func(g *Graceful) error {
@@ -316,11 +321,14 @@ func TestRunListener(t *testing.T) {
 }
 
 func TestWithUnix(t *testing.T) {
-	unixTestSocket := filepath.Join(os.TempDir(), fmt.Sprintf("graceful-%d.sock", time.Now().UnixNano()))
+	unixTestSocket := filepath.Join(
+		os.TempDir(), //nolint:usetesting // t.TempDir() paths can exceed the 104-char unix socket limit
+		fmt.Sprintf("graceful-%d.sock", time.Now().UnixNano()),
+	)
 	defer os.Remove(unixTestSocket)
 
 	router, err := Default(WithUnix(unixTestSocket))
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, router)
 	defer router.Close()
 
@@ -335,7 +343,7 @@ func TestWithUnix(t *testing.T) {
 
 	var d net.Dialer
 	c, err := d.DialContext(context.Background(), "unix", unixTestSocket)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	fmt.Fprint(c, "GET /example HTTP/1.0\r\n\r\n")
 	scanner := bufio.NewScanner(c)
@@ -351,11 +359,14 @@ func TestWithUnix(t *testing.T) {
 }
 
 func TestRunUnix(t *testing.T) {
-	unixTestSocket := filepath.Join(os.TempDir(), fmt.Sprintf("graceful-%d.sock", time.Now().UnixNano()))
+	unixTestSocket := filepath.Join(
+		os.TempDir(), //nolint:usetesting // t.TempDir() paths can exceed the 104-char unix socket limit
+		fmt.Sprintf("graceful-%d.sock", time.Now().UnixNano()),
+	)
 	defer os.Remove(unixTestSocket)
 
 	router, err := Default()
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, router)
 	defer router.Close()
 
@@ -370,7 +381,7 @@ func TestRunUnix(t *testing.T) {
 
 	var d net.Dialer
 	c, err := d.DialContext(context.Background(), "unix", unixTestSocket)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	fmt.Fprint(c, "GET /example HTTP/1.0\r\n\r\n")
 	scanner := bufio.NewScanner(c)
@@ -387,7 +398,7 @@ func TestRunUnix(t *testing.T) {
 
 func testRouterConstructor(t *testing.T, constructor func() (*Graceful, error), urls ...string) {
 	router, err := constructor()
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, router)
 	defer router.Close()
 
@@ -402,14 +413,14 @@ func testRouterConstructor(t *testing.T, constructor func() (*Graceful, error), 
 	testRequest(t, urls...)
 
 	err = router.Shutdown(context.Background())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	<-ctx.Done()
 }
 
 func testRouterRun(t *testing.T, run func(*Graceful) error, urls ...string) {
 	router, err := Default()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, router)
 	defer router.Close()
 
@@ -459,14 +470,14 @@ func testRequest(t *testing.T, urls ...string) {
 	client := &http.Client{Transport: tr}
 
 	for _, url := range urls {
-		req, err := http.NewRequestWithContext(context.Background(), "GET", url, nil)
-		assert.NoError(t, err)
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
+		require.NoError(t, err)
 		resp, err := client.Do(req)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		defer resp.Body.Close()
 
 		body, ioerr := io.ReadAll(resp.Body)
-		assert.NoError(t, ioerr)
+		require.NoError(t, ioerr)
 
 		responseStatus := "200 OK"
 		responseBody := "it worked"
@@ -486,7 +497,7 @@ func TestWithShutdownTimeout(t *testing.T) {
 	// Test with custom timeout - verify it doesn't error
 	customTimeout := 5 * time.Second
 	router, err := Default(WithShutdownTimeout(customTimeout))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, router)
 	defer router.Close()
 
@@ -495,7 +506,7 @@ func TestWithShutdownTimeout(t *testing.T) {
 
 	// Test with default timeout
 	router2, err := Default()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, router2)
 	defer router2.Close()
 
@@ -506,7 +517,7 @@ func TestWithShutdownTimeout(t *testing.T) {
 func TestShutdownTimeoutInAction(t *testing.T) {
 	// Test that custom timeout can be set and basic shutdown works
 	router, err := Default(WithShutdownTimeout(1 * time.Second))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, router)
 	defer router.Close()
 
@@ -515,11 +526,9 @@ func TestShutdownTimeoutInAction(t *testing.T) {
 	})
 
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		_ = router.RunWithContext(context.Background())
-	}()
+	})
 
 	// Wait for server to start
 	time.Sleep(100 * time.Millisecond)
@@ -529,7 +538,7 @@ func TestShutdownTimeoutInAction(t *testing.T) {
 
 	// Shutdown should work normally with custom timeout
 	err = router.Shutdown(context.Background())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	wg.Wait()
 }
@@ -544,7 +553,7 @@ func TestWithServerTimeouts(t *testing.T) {
 		WithAddr(":8088"),
 		WithServerTimeouts(customRead, customWrite, customIdle),
 	)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, router)
 	defer router.Close()
 
@@ -555,18 +564,16 @@ func TestWithServerTimeouts(t *testing.T) {
 
 	// Start the server to verify it works with custom timeouts
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		_ = router.RunWithContext(context.Background())
-	}()
+	})
 
 	// Wait for server to start
 	time.Sleep(100 * time.Millisecond)
 
 	// Verify the server was created with correct timeouts
 	router.lock.Lock()
-	assert.Equal(t, 1, len(router.servers))
+	assert.Len(t, router.servers, 1)
 	srv := router.servers[0]
 	assert.Equal(t, customRead, srv.ReadTimeout)
 	assert.Equal(t, customWrite, srv.WriteTimeout)
@@ -576,7 +583,7 @@ func TestWithServerTimeouts(t *testing.T) {
 
 	// Shutdown
 	err = router.Shutdown(context.Background())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	wg.Wait()
 }
@@ -584,7 +591,7 @@ func TestWithServerTimeouts(t *testing.T) {
 func TestDefaultServerTimeouts(t *testing.T) {
 	// Test with default timeouts (no WithServerTimeouts option)
 	router, err := Default(WithAddr(":8089"))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, router)
 	defer router.Close()
 
@@ -595,18 +602,16 @@ func TestDefaultServerTimeouts(t *testing.T) {
 
 	// Start the server
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		_ = router.RunWithContext(context.Background())
-	}()
+	})
 
 	// Wait for server to start
 	time.Sleep(100 * time.Millisecond)
 
 	// Verify the server was created with default timeouts
 	router.lock.Lock()
-	assert.Equal(t, 1, len(router.servers))
+	assert.Len(t, router.servers, 1)
 	srv := router.servers[0]
 	assert.Equal(t, DefaultReadTimeout, srv.ReadTimeout)
 	assert.Equal(t, DefaultWriteTimeout, srv.WriteTimeout)
@@ -616,7 +621,7 @@ func TestDefaultServerTimeouts(t *testing.T) {
 
 	// Shutdown
 	err = router.Shutdown(context.Background())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	wg.Wait()
 }
@@ -629,7 +634,7 @@ func TestPartialServerTimeouts(t *testing.T) {
 		WithAddr(":8090"),
 		WithServerTimeouts(customRead, 0, 0), // Only set read timeout
 	)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, router)
 	defer router.Close()
 
@@ -640,18 +645,16 @@ func TestPartialServerTimeouts(t *testing.T) {
 
 	// Start the server
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		_ = router.RunWithContext(context.Background())
-	}()
+	})
 
 	// Wait for server to start
 	time.Sleep(100 * time.Millisecond)
 
 	// Verify the server was created with correct timeouts
 	router.lock.Lock()
-	assert.Equal(t, 1, len(router.servers))
+	assert.Len(t, router.servers, 1)
 	srv := router.servers[0]
 	assert.Equal(t, customRead, srv.ReadTimeout)
 	assert.Equal(t, DefaultWriteTimeout, srv.WriteTimeout) // Should use default
@@ -660,7 +663,7 @@ func TestPartialServerTimeouts(t *testing.T) {
 
 	// Shutdown
 	err = router.Shutdown(context.Background())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	wg.Wait()
 }
@@ -673,12 +676,12 @@ func TestWithBeforeShutdownHook(t *testing.T) {
 			return nil
 		}),
 	)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, router)
 	defer router.Close()
 
 	err = router.Shutdown(context.Background())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, hookExecuted, "BeforeShutdown hook should have been executed")
 }
 
@@ -690,12 +693,12 @@ func TestWithAfterShutdownHook(t *testing.T) {
 			return nil
 		}),
 	)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, router)
 	defer router.Close()
 
 	err = router.Shutdown(context.Background())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, hookExecuted, "AfterShutdown hook should have been executed")
 }
 
@@ -720,12 +723,12 @@ func TestMultipleHooksExecutionOrder(t *testing.T) {
 			return nil
 		}),
 	)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, router)
 	defer router.Close()
 
 	err = router.Shutdown(context.Background())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, []string{"before1", "before2", "after1", "after2"}, executionOrder,
 		"Hooks should execute in registration order")
 }
@@ -741,14 +744,24 @@ func TestHookErrorHandling(t *testing.T) {
 			return expectedErr
 		}),
 	)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, router)
 	defer router.Close()
 
 	err = router.Shutdown(context.Background())
-	assert.Error(t, err, "Shutdown should return hook errors")
-	assert.Contains(t, err.Error(), "before shutdown hook", "Error should identify before shutdown hook")
-	assert.Contains(t, err.Error(), "after shutdown hook", "Error should identify after shutdown hook")
+	require.Error(t, err, "Shutdown should return hook errors")
+	assert.Contains(
+		t,
+		err.Error(),
+		"before shutdown hook",
+		"Error should identify before shutdown hook",
+	)
+	assert.Contains(
+		t,
+		err.Error(),
+		"after shutdown hook",
+		"Error should identify after shutdown hook",
+	)
 	assert.Contains(t, err.Error(), "hook failed", "Error should contain original error message")
 }
 
@@ -766,7 +779,7 @@ func TestHookContextCancellation(t *testing.T) {
 			}
 		}),
 	)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, router)
 	defer router.Close()
 
@@ -774,17 +787,17 @@ func TestHookContextCancellation(t *testing.T) {
 	cancel() // Cancel immediately
 
 	err = router.Shutdown(ctx)
-	assert.Error(t, err, "Should return context cancellation error")
+	require.Error(t, err, "Should return context cancellation error")
 	assert.True(t, contextWasCanceled, "Hook should have received canceled context")
 }
 
 func TestNilHookValidation(t *testing.T) {
 	_, err := Default(WithBeforeShutdown(nil))
-	assert.Error(t, err, "Should reject nil BeforeShutdown hook")
+	require.Error(t, err, "Should reject nil BeforeShutdown hook")
 	assert.Contains(t, err.Error(), "before shutdown hook cannot be nil")
 
 	_, err = Default(WithAfterShutdown(nil))
-	assert.Error(t, err, "Should reject nil AfterShutdown hook")
+	require.Error(t, err, "Should reject nil AfterShutdown hook")
 	assert.Contains(t, err.Error(), "after shutdown hook cannot be nil")
 }
 
@@ -804,12 +817,12 @@ func TestHooksCombinedErrorHandling(t *testing.T) {
 			return error3
 		}),
 	)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, router)
 	defer router.Close()
 
 	err = router.Shutdown(context.Background())
-	assert.Error(t, err, "Should return combined errors")
+	require.Error(t, err, "Should return combined errors")
 
 	// Verify all errors are present in the combined error
 	assert.Contains(t, err.Error(), "error 1")
@@ -831,7 +844,7 @@ func TestHooksWithRunningServer(t *testing.T) {
 			return nil
 		}),
 	)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, router)
 	defer router.Close()
 
@@ -840,11 +853,9 @@ func TestHooksWithRunningServer(t *testing.T) {
 	})
 
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		_ = router.RunWithContext(context.Background())
-	}()
+	})
 
 	// Wait for server to start
 	time.Sleep(100 * time.Millisecond)
@@ -854,7 +865,7 @@ func TestHooksWithRunningServer(t *testing.T) {
 
 	// Shutdown should trigger both hooks
 	err = router.Shutdown(context.Background())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, beforeCalled, "BeforeShutdown hook should be called")
 	assert.True(t, afterCalled, "AfterShutdown hook should be called")
 
