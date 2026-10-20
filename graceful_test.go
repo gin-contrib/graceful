@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -56,6 +57,69 @@ func TestCycle(t *testing.T) {
 
 		cancelService()
 		<-ctxEnd.Done()
+	}
+}
+
+func TestRunWithContextWaitsForInflightRequest(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	addr := ln.Addr().String()
+	require.NoError(t, ln.Close())
+
+	router, err := New(gin.New(), WithAddr(addr))
+	require.NoError(t, err)
+
+	started := make(chan struct{})
+	var finished atomic.Bool
+	router.GET("/", func(c *gin.Context) {
+		close(started)
+		time.Sleep(400 * time.Millisecond)
+		finished.Store(true)
+		c.Status(http.StatusOK)
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	returned := make(chan error, 1)
+	go func() {
+		returned <- router.RunWithContext(ctx)
+	}()
+
+	require.Eventually(t, func() bool {
+		conn, dialErr := net.DialTimeout("tcp", addr, 50*time.Millisecond)
+		if dialErr != nil {
+			return false
+		}
+		conn.Close()
+		return true
+	}, 2*time.Second, 20*time.Millisecond)
+
+	go func() {
+		resp, getErr := http.Get("http://" + addr + "/")
+		if getErr == nil {
+			resp.Body.Close()
+		}
+	}()
+
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("handler did not start")
+	}
+
+	cancel()
+
+	select {
+	case err := <-returned:
+		require.ErrorIs(t, err, context.Canceled)
+		if !finished.Load() {
+			t.Fatal("RunWithContext returned before the in-flight request finished")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("RunWithContext did not return")
 	}
 }
 

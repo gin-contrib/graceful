@@ -197,7 +197,12 @@ func (g *Graceful) RunWithContext(ctx context.Context) error {
 	}
 
 	ctx, cancel := context.WithCancel(ctx)
+	// Closed after the shutdown goroutine's Shutdown returns, including the
+	// wait for in-flight requests. ListenAndServe returns earlier, as soon as
+	// the listener is closed.
+	shutdownDone := make(chan struct{})
 	go func() { //nolint:gosec // shutdown goroutine intentionally uses a fresh context after parent cancellation
+		defer close(shutdownDone)
 		<-ctx.Done()
 		// Create a new context with timeout for graceful shutdown
 		// Cannot reuse the canceled ctx as it would cause immediate timeout
@@ -226,7 +231,11 @@ func (g *Graceful) RunWithContext(ctx context.Context) error {
 
 	g.lock.Unlock()
 
-	if err := waitWithContext(ctx, &eg); err != nil {
+	err := waitWithContext(ctx, &eg)
+	if ctx.Err() != nil {
+		<-shutdownDone
+	}
+	if err != nil {
 		return err
 	}
 	// Use a fresh context with timeout for final shutdown
