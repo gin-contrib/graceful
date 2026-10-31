@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -831,16 +832,16 @@ func TestHooksCombinedErrorHandling(t *testing.T) {
 }
 
 func TestHooksWithRunningServer(t *testing.T) {
-	var beforeCalled, afterCalled bool
+	var beforeCalled, afterCalled atomic.Bool
 
 	router, err := Default(
 		WithAddr(":8091"),
 		WithBeforeShutdown(func(ctx context.Context) error {
-			beforeCalled = true
+			beforeCalled.Store(true)
 			return nil
 		}),
 		WithAfterShutdown(func(ctx context.Context) error {
-			afterCalled = true
+			afterCalled.Store(true)
 			return nil
 		}),
 	)
@@ -866,8 +867,8 @@ func TestHooksWithRunningServer(t *testing.T) {
 	// Shutdown should trigger both hooks
 	err = router.Shutdown(context.Background())
 	require.NoError(t, err)
-	assert.True(t, beforeCalled, "BeforeShutdown hook should be called")
-	assert.True(t, afterCalled, "AfterShutdown hook should be called")
+	assert.True(t, beforeCalled.Load(), "BeforeShutdown hook should be called")
+	assert.True(t, afterCalled.Load(), "AfterShutdown hook should be called")
 
 	wg.Wait()
 }
